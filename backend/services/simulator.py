@@ -107,20 +107,34 @@ def calculate_risk_score(
     포트폴리오 리스크 점수 계산 (0~100)
     Returns: (score, grade)
     """
-    _, weighted_vol = get_weighted_return_and_vol(portfolio.allocations, market_snapshot)
+    from models.portfolio import AssetType
+    from services.market_data import BASE_VOLATILITY
 
-    # 변동성 기반 기본 점수 (연 변동성 20% → 100점 기준)
-    vol_score = min(int(weighted_vol * 500), 100)
+    _RISKY_TYPES = {
+        AssetType.FOREIGN_STOCK, AssetType.DOMESTIC_STOCK,
+        AssetType.BITCOIN, AssetType.CRYPTO, AssetType.ALTERNATIVE, AssetType.GOLD,
+    }
 
-    # 집중도 패널티 (단일 자산 60% 초과 시)
+    # 1. 가중평균 변동성 기반 점수 (기본값 사용으로 안정적 산출)
+    weighted_vol = sum(
+        (a.weight / 100) * BASE_VOLATILITY.get(a.asset_type, 0.15)
+        for a in portfolio.allocations
+    )
+    vol_score = min(int(weighted_vol * 300), 80)
+
+    # 2. 위험자산 비중 점수 (주식·암호화폐·대안·금, 최대 30점)
+    risky_w = sum(a.weight for a in portfolio.allocations if a.asset_type in _RISKY_TYPES) / 100
+    risky_score = int(risky_w * 30)
+
+    # 3. 집중도 패널티 (단일 자산 50% 초과 시)
     max_weight = max(a.weight for a in portfolio.allocations)
-    concentration_penalty = max(0, (max_weight - 60) * 0.5)
+    concentration_penalty = int(max(0, (max_weight - 50) * 0.5))
 
-    # 자산군 다양성 보너스
+    # 4. 다양성 보너스 (최대 10점)
     asset_types = set(a.asset_type for a in portfolio.allocations)
-    diversity_bonus = len(asset_types) * 3
+    diversity_bonus = min(len(asset_types) * 2, 10)
 
-    score = int(vol_score + concentration_penalty - diversity_bonus)
+    score = vol_score + risky_score + concentration_penalty - diversity_bonus
     score = max(0, min(100, score))
 
     if score <= 30:

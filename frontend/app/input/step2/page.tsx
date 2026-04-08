@@ -96,6 +96,11 @@ export default function Step2Page() {
             </span>
           </div>
 
+          {/* 자산 유형 안내 */}
+          <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-2 mb-4 text-xs text-blue-600 leading-relaxed">
+            💡 <strong>유형 선택 가이드</strong>: 단기국채·MMF·예금 → <strong>단기채권</strong> &nbsp;|&nbsp; ETH·SOL·XRP 등 → <strong>암호화폐</strong> &nbsp;|&nbsp; 삼성전자·SK하이닉스 → <strong>국내주식</strong> &nbsp;|&nbsp; 엔비디아·애플 → <strong>해외주식</strong>
+          </div>
+
           {/* 자산 목록 */}
           <div className="space-y-3 mb-4">
             {portfolio.allocations.map((alloc, i) => (

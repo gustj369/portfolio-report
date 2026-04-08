@@ -221,28 +221,36 @@ def generate_rebalancing_comparison_chart(
     current_labels = [a.asset_name for a in portfolio.allocations]
     current_sizes = [a.weight for a in portfolio.allocations]
 
-    # 추천 비중 데이터 정리
+    # 추천 비중 데이터 정리 (기존 자산)
     rec_map = {r["asset_name"]: r["recommended_weight"] for r in recommendations}
-    rec_labels = current_labels
     rec_sizes = [rec_map.get(name, weight) for name, weight in zip(current_labels, current_sizes)]
 
-    # 합계를 100으로 정규화
-    rec_total = sum(rec_sizes)
-    if rec_total > 0:
-        rec_sizes = [s / rec_total * 100 for s in rec_sizes]
+    # 신규 편입 항목 추가 (추천 비중 차트에만 표시)
+    new_rec_labels = list(current_labels)
+    new_rec_sizes = list(rec_sizes)
+    for r in recommendations:
+        if r["asset_name"] not in current_labels and r.get("recommended_weight", 0) > 0:
+            new_rec_labels.append(r["asset_name"])
+            new_rec_sizes.append(r["recommended_weight"])
 
-    colors = COLORS_PIE[:len(current_labels)]
+    # 합계를 100으로 정규화
+    rec_total = sum(new_rec_sizes)
+    if rec_total > 0:
+        new_rec_sizes = [s / rec_total * 100 for s in new_rec_sizes]
+
+    max_labels = max(len(current_labels), len(new_rec_labels))
+    colors = COLORS_PIE[:max_labels]
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5), facecolor=WHITE)
 
-    for ax, sizes, title in [
-        (ax1, current_sizes, "현재 비중"),
-        (ax2, rec_sizes, "추천 비중"),
+    for ax, sizes, labels, title in [
+        (ax1, current_sizes, current_labels, "현재 비중"),
+        (ax2, new_rec_sizes, new_rec_labels, "추천 비중"),
     ]:
         ax.set_facecolor(WHITE)
         ax.pie(
             sizes,
-            colors=colors,
+            colors=colors[:len(sizes)],
             autopct="%1.1f%%",
             startangle=90,
             pctdistance=0.8,
@@ -250,10 +258,10 @@ def generate_rebalancing_comparison_chart(
         )
         ax.set_title(title, fontsize=13, fontweight="bold", color=NAVY, pad=10)
 
-    # 공통 범례
+    # 공통 범례 (추천 비중 기준 — 신규 편입 항목 포함)
     legend_patches = [
-        mpatches.Patch(color=colors[i], label=current_labels[i])
-        for i in range(len(current_labels))
+        mpatches.Patch(color=colors[i], label=new_rec_labels[i])
+        for i in range(len(new_rec_labels))
     ]
     fig.legend(
         handles=legend_patches,

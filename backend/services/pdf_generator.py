@@ -11,7 +11,7 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-    Image, PageBreak, HRFlowable
+    Image, PageBreak, HRFlowable, KeepTogether
 )
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
@@ -366,9 +366,9 @@ def _build_portfolio_page(
 
     # 파이차트
     if pie_chart_bytes:
-        chart_img = Image(io.BytesIO(pie_chart_bytes), width=130 * mm, height=90 * mm)
+        chart_img = Image(io.BytesIO(pie_chart_bytes), width=130 * mm, height=72 * mm)
         story.append(chart_img)
-        story.append(Spacer(1, 8))
+        story.append(Spacer(1, 4))
 
     # 자산 배분 테이블
     story.append(Paragraph("자산 구성", styles["subsection_title"]))
@@ -386,14 +386,14 @@ def _build_portfolio_page(
     asset_table = Table(table_data, colWidths=[70 * mm, 40 * mm, 30 * mm, 50 * mm])
     asset_table.setStyle(_table_style())
     story.append(asset_table)
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 6))
 
     # AI 진단
     story.append(Paragraph("AI 종합 진단", styles["subsection_title"]))
     story.append(Paragraph(ai_content.portfolio_diagnosis, styles["body"]))
-    story.append(Spacer(1, 8))
+    story.append(Spacer(1, 6))
 
-    # 강점 / 약점
+    # 강점 / 약점 (KeepTogether로 헤더+내용 같은 페이지 유지)
     _sw_body = lambda items, prefix: [
         Paragraph(f"{prefix} {_xe(item)}", ParagraphStyle(
             f"sw_{prefix}", fontName=FONT_REGULAR, fontSize=9,
@@ -429,7 +429,7 @@ def _build_portfolio_page(
         ("LEFTPADDING", (0, 0), (-1, -1), 10),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e0e0e0")),
     ]))
-    story.append(sw_table)
+    story.append(KeepTogether(sw_table))
 
     return story
 
@@ -587,9 +587,9 @@ def _build_rebalancing_page(
         textColor=COLOR_DARK_GRAY, alignment=align, leading=13,
     ))
 
-    DIRECTION_COLOR = {"증가": COLOR_GREEN, "감소": COLOR_RED, "유지": COLOR_DARK_GRAY}
+    DIRECTION_COLOR = {"증가": COLOR_GREEN, "감소": COLOR_RED, "유지": COLOR_DARK_GRAY, "추가": COLOR_NAVY}
     _rd = lambda direction: Paragraph(
-        {"증가": "▲ 증가", "감소": "▼ 감소", "유지": "─ 유지"}.get(direction, "─ 유지"),
+        {"증가": "▲ 증가", "감소": "▼ 감소", "유지": "─ 유지", "추가": "+ 추가"}.get(direction, "─ 유지"),
         ParagraphStyle(
             f"rd{direction}", fontName=FONT_BOLD, fontSize=9,
             textColor=DIRECTION_COLOR.get(direction, COLOR_DARK_GRAY),
