@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: portfolio-report-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    plan: free
+
+    # 환경변수 — Render 대시보드에서 직접 설정
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: FRED_API_KEY
+        sync: false
+      - key: REDIS_URL
+        sync: false          # Upstash Redis URL (rediss://...)
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY
+        sync: false
+      - key: R2_SECRET_KEY
+        sync: false
+      - key: R2_BUCKET
+        value: portfolio-reports
+      - key: FRONTEND_URL
+        sync: false          # Vercel 배포 URL (https://your-app.vercel.app)
+      - key: USE_LOCAL_STORAGE
+        value: "false"
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: REPORT_PRICE_KRW
+        value: "0"           # 무료

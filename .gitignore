@@ -1,0 +1,35 @@
+# 환경변수 (절대 GitHub에 올리면 안 됨)
+.env
+.env.local
+.env.production
+backend/.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# 생성된 PDF 파일
+backend/generated_reports/
+
+# Node.js
+node_modules/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.vercel/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp

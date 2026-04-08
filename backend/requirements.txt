@@ -1,0 +1,29 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+pydantic>=2.11.0
+pydantic-settings>=2.6.0
+python-dotenv>=1.0.1
+
+# AI — Google Gemini (무료 티어: gemini-1.5-flash 1,500 req/day)
+google-generativeai>=0.8.3
+
+# 시장 데이터
+yfinance>=0.2.50
+requests>=2.32.3
+
+# PDF 생성
+reportlab>=4.2.5
+
+# 차트 (Python 3.14 호환)
+matplotlib>=3.10.0
+numpy>=2.2.0
+
+# HTTP 클라이언트 (Toss Payments)
+httpx>=0.28.0
+
+# AWS S3 / Cloudflare R2 (선택)
+boto3>=1.35.74
+
+# Redis — 세션 데이터 영속성 (Upstash 등 무료 Redis 사용 가능)
+# 미설치 시 인메모리 fallback 동작 (개발 환경)
+redis>=5.0.0

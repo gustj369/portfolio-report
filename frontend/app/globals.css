@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-navy: #1a2e5a;
+    --color-gold: #d4af37;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply text-gray-900;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-6 py-3 bg-navy text-white font-bold rounded-xl hover:bg-navy-700 transition-colors shadow-md;
+  }
+
+  .btn-gold {
+    @apply px-6 py-3 bg-gold-500 text-white font-bold rounded-xl hover:bg-gold-600 transition-colors shadow-md;
+  }
+
+  .card {
+    @apply bg-white rounded-2xl shadow-sm border border-gray-100 p-6;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gold-300 focus:border-transparent transition-all text-base;
+  }
+
+  .section-title {
+    @apply text-2xl font-bold text-navy mb-2;
+  }
+}
+
+/* 블러 섹션 */
+.blur-section {
+  filter: blur(4px);
+  user-select: none;
+  pointer-events: none;
+}
+
+/* 스크롤바 커스텀 */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+::-webkit-scrollbar-thumb {
+  background: #d4af37;
+  border-radius: 3px;
+}
