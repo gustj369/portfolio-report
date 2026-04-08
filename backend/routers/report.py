@@ -133,8 +133,8 @@ async def get_report_status(report_token: str) -> ReportStatusResponse:
 
 
 @router.get("/download/{report_token}")
-async def download_report(report_token: str):
-    """리포트 다운로드 — S3/R2 URL로 리다이렉트 또는 직접 반환"""
+async def download_report(report_token: str, settings: Settings = Depends(get_settings)):
+    """리포트 다운로드 — R2/S3에서 읽어 직접 스트리밍 (CORS 우회)"""
     record = _load_record(report_token)
     if not record:
         raise HTTPException(status_code=404, detail="리포트를 찾을 수 없습니다.")
@@ -142,10 +142,35 @@ async def download_report(report_token: str):
     if record.status != ReportStatus.READY:
         raise HTTPException(status_code=409, detail="리포트가 아직 준비되지 않았습니다.")
 
-    if not record.download_url:
-        raise HTTPException(status_code=500, detail="다운로드 URL을 찾을 수 없습니다.")
+    filename = f"report_{report_token}.pdf"
 
-    return RedirectResponse(url=record.download_url, status_code=302)
+    # R2에서 읽어 스트리밍
+    if settings.r2_account_id and settings.r2_access_key and settings.r2_secret_key:
+        import boto3
+        from fastapi.responses import StreamingResponse
+        import io
+        s3 = boto3.client(
+            "s3",
+            endpoint_url=f"https://{settings.r2_account_id}.r2.cloudflarestorage.com",
+            aws_access_key_id=settings.r2_access_key,
+            aws_secret_access_key=settings.r2_secret_key,
+            region_name="auto",
+        )
+        s3_key = f"reports/{report_token}/{filename}"
+        obj = s3.get_object(Bucket=settings.r2_bucket, Key=s3_key)
+        pdf_bytes = obj["Body"].read()
+        return StreamingResponse(
+            io.BytesIO(pdf_bytes),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+
+    # 로컬 파일 서빙
+    from fastapi.responses import FileResponse
+    filepath = os.path.join(LOCAL_REPORTS_DIR, filename)
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
+    return FileResponse(path=filepath, media_type="application/pdf", filename=filename)
 
 
 async def _generate_report_background(
@@ -266,7 +291,7 @@ async def _save_report(report_token: str, pdf_bytes: bytes, settings: Settings) 
     """PDF 저장 — 로컬(개발) / Cloudflare R2 / AWS S3"""
     filename = f"report_{report_token}.pdf"
 
-    # Cloudflare R2 우선
+    # Cloudflare R2 우선 — 저장만 하고 백엔드 다운로드 URL 반환 (CORS 우회)
     if settings.r2_account_id and settings.r2_access_key and settings.r2_secret_key:
         import boto3
         s3 = boto3.client(
@@ -283,12 +308,8 @@ async def _save_report(report_token: str, pdf_bytes: bytes, settings: Settings) 
             Body=pdf_bytes,
             ContentType="application/pdf",
         )
-        presigned_url = s3.generate_presigned_url(
-            "get_object",
-            Params={"Bucket": settings.r2_bucket, "Key": s3_key},
-            ExpiresIn=86400,  # 24시간
-        )
-        return presigned_url
+        # presigned URL 대신 백엔드 프록시 URL 반환 (CORS 문제 없음)
+        return f"/report/download/{report_token}"
 
     # AWS S3
     if not settings.use_local_storage and settings.aws_access_key_id:
