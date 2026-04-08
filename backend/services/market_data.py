@@ -18,10 +18,12 @@ BASE_RETURNS = {
     AssetType.FOREIGN_STOCK: 0.08,
     AssetType.DOMESTIC_STOCK: 0.06,
     AssetType.BOND: 0.04,
-    AssetType.CASH: 0.035,
+    AssetType.SHORT_BOND: 0.04,  # 단기채권: T-bill/MMF 수준 (현재 금리 반영)
+    AssetType.CASH: 0.025,
     AssetType.ALTERNATIVE: 0.05,
-    AssetType.BITCOIN: 0.30,   # 연 30% (역사적 평균, 변동성 매우 높음)
-    AssetType.GOLD: 0.07,      # 연 7% (인플레이션 헤지)
+    AssetType.BITCOIN: 0.30,     # 연 30% (역사적 평균, 변동성 매우 높음)
+    AssetType.CRYPTO: 0.25,      # ETH/SOL/XRP 등: BTC보다 약간 낮은 기대수익
+    AssetType.GOLD: 0.07,        # 연 7% (인플레이션 헤지)
 }
 
 # 자산유형별 기본 변동성 (연간 표준편차)
@@ -29,10 +31,12 @@ BASE_VOLATILITY = {
     AssetType.FOREIGN_STOCK: 0.18,
     AssetType.DOMESTIC_STOCK: 0.20,
     AssetType.BOND: 0.07,
+    AssetType.SHORT_BOND: 0.02,  # 단기채권: 매우 낮은 변동성
     AssetType.CASH: 0.01,
     AssetType.ALTERNATIVE: 0.15,
-    AssetType.BITCOIN: 0.80,   # 변동성 80% (암호화폐 특성)
-    AssetType.GOLD: 0.15,      # 변동성 15%
+    AssetType.BITCOIN: 0.80,     # 변동성 80% (암호화폐 특성)
+    AssetType.CRYPTO: 0.70,      # ETH/SOL/XRP: 비트코인보다 약간 낮은 변동성
+    AssetType.GOLD: 0.15,        # 변동성 15%
 }
 
 # 주요 시장 지수 티커

@@ -20,9 +20,11 @@ class AssetType(str, Enum):
     DOMESTIC_STOCK = "국내주식"
     FOREIGN_STOCK = "해외주식"
     BOND = "채권"
+    SHORT_BOND = "단기채권"    # T-bill, MMF, CD 등
     CASH = "현금"
     ALTERNATIVE = "대안자산"
     BITCOIN = "비트코인"
+    CRYPTO = "암호화폐"        # ETH, SOL, XRP 등 비트코인 외 암호화폐
     GOLD = "금"
 
 

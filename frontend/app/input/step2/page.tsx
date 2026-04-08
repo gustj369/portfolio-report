@@ -6,15 +6,17 @@ import PortfolioChart from "@/components/PortfolioChart";
 import { useInput } from "@/context/InputContext";
 import type { AssetType } from "@/types/portfolio";
 
-const ASSET_TYPES: AssetType[] = ["해외주식", "국내주식", "채권", "현금", "대안자산", "비트코인", "금"];
+const ASSET_TYPES: AssetType[] = ["해외주식", "국내주식", "채권", "단기채권", "현금", "대안자산", "비트코인", "암호화폐", "금"];
 
 const ASSET_TYPE_COLORS: Record<AssetType, string> = {
   해외주식: "bg-blue-100 text-blue-700",
   국내주식: "bg-green-100 text-green-700",
   채권: "bg-yellow-100 text-yellow-700",
+  단기채권: "bg-teal-100 text-teal-700",
   현금: "bg-gray-100 text-gray-700",
   대안자산: "bg-purple-100 text-purple-700",
   비트코인: "bg-orange-100 text-orange-700",
+  암호화폐: "bg-red-100 text-red-700",
   금: "bg-yellow-100 text-yellow-800",
 };
 

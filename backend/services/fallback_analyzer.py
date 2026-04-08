@@ -14,13 +14,14 @@ _TARGET_ALLOC = {
 }
 
 _EQUITY_TYPES = {AssetType.FOREIGN_STOCK, AssetType.DOMESTIC_STOCK}
-_BOND_TYPES = {AssetType.BOND}
+_BOND_TYPES = {AssetType.BOND, AssetType.SHORT_BOND}
 _CASH_TYPES = {AssetType.CASH}
-_ALT_TYPES = {AssetType.ALTERNATIVE, AssetType.BITCOIN, AssetType.GOLD}
+_ALT_TYPES = {AssetType.ALTERNATIVE, AssetType.BITCOIN, AssetType.CRYPTO, AssetType.GOLD}
 
 # 자산 유형별 한국어 표시명
 _ALT_NAMES = {
-    AssetType.BITCOIN: "암호화폐",
+    AssetType.BITCOIN: "비트코인",
+    AssetType.CRYPTO: "암호화폐",
     AssetType.GOLD: "금",
     AssetType.ALTERNATIVE: "대안자산",
 }
@@ -162,13 +163,13 @@ def generate_personalized_content(
     if max_w >= 40:
         weaknesses.append(f"'{max_name}' 단일 비중 {max_w:.0f}%로 집중 — 해당 자산 급락 시 전체 포트폴리오 영향 큼")
 
-    # 비트코인 고변동성 경고
-    btc_allocs = [a for a in portfolio.allocations if a.asset_type == AssetType.BITCOIN]
-    if btc_allocs:
-        btc_w = sum(a.weight for a in btc_allocs)
-        if btc_w >= 20:
+    # 암호화폐(비트코인/기타) 고변동성 경고
+    crypto_allocs = [a for a in portfolio.allocations if a.asset_type in (AssetType.BITCOIN, AssetType.CRYPTO)]
+    if crypto_allocs:
+        crypto_w = sum(a.weight for a in crypto_allocs)
+        if crypto_w >= 20:
             weaknesses.append(
-                f"암호화폐 {btc_w:.0f}% — 연 변동성 80%+ 자산으로 단기 50~70% 급락 가능성 존재, "
+                f"암호화폐 {crypto_w:.0f}% — 연 변동성 70~80%+ 자산으로 단기 50~70% 급락 가능성 존재, "
                 f"손실 감내 능력 충분히 고려 필요"
             )
 
@@ -390,12 +391,12 @@ def _generate_market_commentary(
                 f"환율 리스크를 주기적으로 점검하세요."
             )
 
-    # 비트코인 보유자 전용 코멘트
-    btc_allocs = [a for a in portfolio.allocations if a.asset_type == AssetType.BITCOIN]
-    if btc_allocs:
-        btc_w = sum(a.weight for a in btc_allocs)
+    # 암호화폐(비트코인/기타) 보유자 전용 코멘트
+    crypto_allocs = [a for a in portfolio.allocations if a.asset_type in (AssetType.BITCOIN, AssetType.CRYPTO)]
+    if crypto_allocs:
+        crypto_w = sum(a.weight for a in crypto_allocs)
         parts.append(
-            f"암호화폐 {btc_w:.0f}% 보유 포트폴리오는 급등·급락 사이클에 민감합니다. "
+            f"암호화폐 {crypto_w:.0f}% 보유 포트폴리오는 급등·급락 사이클에 민감합니다. "
             f"금 현물 가격 ${market.gold_price:,.0f} 수준도 참고하여 대안자산 비중을 점검하세요."
         )
 
@@ -418,11 +419,11 @@ def _generate_cautions(
     """포트폴리오 맞춤 주의사항"""
     cautions = []
 
-    btc_allocs = [a for a in portfolio.allocations if a.asset_type == AssetType.BITCOIN]
-    if btc_allocs:
-        btc_w = sum(a.weight for a in btc_allocs)
+    crypto_allocs = [a for a in portfolio.allocations if a.asset_type in (AssetType.BITCOIN, AssetType.CRYPTO)]
+    if crypto_allocs:
+        crypto_w = sum(a.weight for a in crypto_allocs)
         cautions.append(
-            f"암호화폐({btc_w:.0f}%)는 규제 변화, 거래소 리스크 등 일반 주식과 다른 고유 리스크가 있습니다. "
+            f"암호화폐({crypto_w:.0f}%)는 규제 변화, 거래소 리스크 등 일반 주식과 다른 고유 리스크가 있습니다. "
             f"전체 자산의 10~20% 이내 보유를 일반적으로 권장합니다."
         )
 

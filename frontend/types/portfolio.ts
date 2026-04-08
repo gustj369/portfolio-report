@@ -1,6 +1,6 @@
 export type InvestmentGoal = "노후준비" | "주택구입" | "자산증식" | "기타";
 export type RiskTolerance = "안정형" | "중립형" | "공격형";
-export type AssetType = "국내주식" | "해외주식" | "채권" | "현금" | "대안자산" | "비트코인" | "금";
+export type AssetType = "국내주식" | "해외주식" | "채권" | "단기채권" | "현금" | "대안자산" | "비트코인" | "암호화폐" | "금";
 
 export interface UserProfile {
   age: number;
