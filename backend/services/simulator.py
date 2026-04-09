@@ -126,9 +126,9 @@ def calculate_risk_score(
     risky_w = sum(a.weight for a in portfolio.allocations if a.asset_type in _RISKY_TYPES) / 100
     risky_score = int(risky_w * 30)
 
-    # 3. 집중도 패널티 (단일 자산 50% 초과 시)
+    # 3. 집중도 패널티 (단일 자산 40% 초과 시)
     max_weight = max(a.weight for a in portfolio.allocations)
-    concentration_penalty = int(max(0, (max_weight - 50) * 0.5))
+    concentration_penalty = int(max(0, (max_weight - 40) * 0.5))
 
     # 4. 다양성 보너스 (최대 10점)
     asset_types = set(a.asset_type for a in portfolio.allocations)

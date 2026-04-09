@@ -362,15 +362,15 @@ def _build_portfolio_page(
 
     story.append(Paragraph("현재 포트폴리오 진단", styles["section_title"]))
     story.append(HRFlowable(width="100%", thickness=2, color=COLOR_GOLD))
-    story.append(Spacer(1, 8))
+    story.append(Spacer(1, 4))
 
     # 파이차트
     if pie_chart_bytes:
-        chart_img = Image(io.BytesIO(pie_chart_bytes), width=130 * mm, height=72 * mm)
+        chart_img = Image(io.BytesIO(pie_chart_bytes), width=120 * mm, height=58 * mm)
         story.append(chart_img)
-        story.append(Spacer(1, 4))
+        story.append(Spacer(1, 2))
 
-    # 자산 배분 테이블
+    # 자산 배분 테이블 (compact 패딩)
     story.append(Paragraph("자산 구성", styles["subsection_title"]))
     table_data = [["자산명", "유형", "비중", "투자금액 (추정)"]]
     total_asset = portfolio.total_asset
@@ -384,20 +384,23 @@ def _build_portfolio_page(
         ])
 
     asset_table = Table(table_data, colWidths=[70 * mm, 40 * mm, 30 * mm, 50 * mm])
-    asset_table.setStyle(_table_style())
+    asset_table.setStyle(_compact_table_style())
     story.append(asset_table)
-    story.append(Spacer(1, 6))
+    story.append(Spacer(1, 4))
 
     # AI 진단
     story.append(Paragraph("AI 종합 진단", styles["subsection_title"]))
-    story.append(Paragraph(ai_content.portfolio_diagnosis, styles["body"]))
-    story.append(Spacer(1, 6))
+    story.append(Paragraph(ai_content.portfolio_diagnosis, ParagraphStyle(
+        "DiagBody", fontName=FONT_REGULAR, fontSize=9,
+        textColor=COLOR_DARK_GRAY, spaceAfter=3, leading=14,
+    )))
+    story.append(Spacer(1, 4))
 
     # 강점 / 약점 (KeepTogether로 헤더+내용 같은 페이지 유지)
     _sw_body = lambda items, prefix: [
         Paragraph(f"{prefix} {_xe(item)}", ParagraphStyle(
-            f"sw_{prefix}", fontName=FONT_REGULAR, fontSize=9,
-            textColor=COLOR_DARK_GRAY, leading=14, spaceAfter=2,
+            f"sw_{prefix}", fontName=FONT_REGULAR, fontSize=8.5,
+            textColor=COLOR_DARK_GRAY, leading=12, spaceAfter=2,
         ))
         for item in items
     ]
@@ -702,6 +705,25 @@ def _build_market_page(
         story.append(Paragraph(text, styles["disclaimer"]))
 
     return story
+
+
+def _compact_table_style() -> TableStyle:
+    """자산구성 테이블용 compact 스타일 (행 높이 최소화)"""
+    return TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), COLOR_NAVY),
+        ("TEXTCOLOR", (0, 0), (-1, 0), COLOR_WHITE),
+        ("FONTNAME", (0, 0), (-1, 0), FONT_BOLD),
+        ("FONTSIZE", (0, 0), (-1, 0), 9),
+        ("FONTNAME", (0, 1), (-1, -1), FONT_REGULAR),
+        ("FONTSIZE", (0, 1), (-1, -1), 8.5),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [COLOR_WHITE, COLOR_LIGHT_GRAY]),
+        ("ALIGN", (2, 1), (3, -1), "RIGHT"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e0e0e0")),
+    ])
 
 
 def _table_style() -> TableStyle:

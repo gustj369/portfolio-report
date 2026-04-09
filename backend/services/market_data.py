@@ -73,9 +73,12 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
     for key, ticker in MARKET_TICKERS.items():
         try:
             t = yf.Ticker(ticker)
-            hist = t.history(period="5d")
+            hist = t.history(period="1mo")
             if not hist.empty:
-                price = float(hist["Close"].iloc[-1])
+                close_data = hist["Close"].dropna()
+                if close_data.empty:
+                    continue
+                price = float(close_data.iloc[-1])
                 if key == "sp500":
                     # S&P 500: 합리적 범위 체크 (1000~10000)
                     if 1000 <= price <= 10000:

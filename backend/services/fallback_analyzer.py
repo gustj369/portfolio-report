@@ -321,18 +321,24 @@ def _generate_rebalancing(portfolio: Portfolio, g: dict, target: dict, risk_grad
             recs.append({"asset_name": a.asset_name, "current_weight": a.weight,
                           "recommended_weight": new_w, "direction": direction, "reason": reason})
 
-    # ── 비중 합 100% 미세 보정 (소수점 오차만) ───────────────────
+    # ── 비중 합 100% 미세 보정 ───────────────────────────────────
     total_rec = sum(r["recommended_weight"] for r in recs)
     diff = round(100.0 - total_rec, 1)
     if abs(diff) >= 0.1:
-        # 조정 가능한 자산 중 비중이 가장 큰 자산에서 소수점 잔차 흡수
+        # 조정 가능한 자산 중 비중이 가장 큰 자산에서 잔차 흡수
         adjustable = [r for r in recs if r["direction"] in ("증가", "감소", "유지")
                       and r.get("recommended_weight", 0) >= 5.0]
         if adjustable:
             largest = max(adjustable, key=lambda r: r["recommended_weight"])
             largest["recommended_weight"] = round(largest["recommended_weight"] + diff, 1)
-            if abs(largest["recommended_weight"] - largest["current_weight"]) < 0.5:
+            # 보정 후 방향 재계산
+            gap = largest["recommended_weight"] - largest["current_weight"]
+            if abs(gap) < 0.5:
                 largest["direction"] = "유지"
+            elif gap < 0:
+                largest["direction"] = "감소"
+            else:
+                largest["direction"] = "증가"
 
     return recs
 
