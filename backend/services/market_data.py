@@ -118,7 +118,6 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
     if data["kospi"] == 2500.0:
         # fallback 2: yf.download (다른 내부 엔드포인트 사용)
         try:
-            import pandas as pd
             dl = yf.download("^KS11", period="5d", interval="1d", progress=False, auto_adjust=True)
             if not dl.empty:
                 close = dl["Close"].dropna()
