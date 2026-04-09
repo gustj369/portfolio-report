@@ -178,7 +178,7 @@ def generate_personalized_content(
     target_bond_w = target.get("bond", 0)
     if bond_w == 0:
         weaknesses.append("채권 0% — 금리 급등·경기침체 시 전체 포트폴리오 보호막 부재")
-    elif bond_w < target_bond_w - 5:
+    elif bond_w < target_bond_w - 3:
         weaknesses.append(
             f"채권 비중 {bond_w:.0f}%로 {risk_grade} 목표({target_bond_w:.0f}%) 대비 미달 — "
             f"금리 급등·경기침체 시 방어력 부족"
@@ -201,6 +201,18 @@ def generate_personalized_content(
         weaknesses.append(
             f"위험자산 {risky_w:.0f}%는 {risk_grade} 권장({target_risky}%) 대비 과도 — "
             f"시장 급락 시 심리적 패닉 매도 위험"
+        )
+
+    # 자기 평가 성향 vs 실제 포트폴리오 불일치
+    if risk_tol == "안정형" and risk_grade in ("중립형", "공격형"):
+        weaknesses.append(
+            f"자기 평가 성향({risk_tol}) 대비 실제 포트폴리오 위험도는 {risk_grade} 수준 — "
+            f"시장 급락 시 심리적 부담 증가, 성향 재점검 권장"
+        )
+    elif risk_tol == "중립형" and risk_grade == "공격형":
+        weaknesses.append(
+            f"자기 평가 성향({risk_tol}) 대비 실제 포트폴리오 위험도는 {risk_grade} 수준 — "
+            f"위험 노출 과다, 리스크 조정 고려"
         )
 
     weaknesses = weaknesses[:4] if weaknesses else ["리밸런싱 주기 계획 수립 권장"]

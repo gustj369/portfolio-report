@@ -104,8 +104,9 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
         except Exception as e:
             logger.warning(f"시장 데이터 수집 실패 ({ticker}): {e}")
 
-    # KOSPI fast_info 최종 fallback (history가 비어있는 경우 대비)
+    # KOSPI 다중 fallback (history가 비어있거나 환경 문제로 실패 시)
     if data["kospi"] == 2500.0:
+        # fallback 1: fast_info
         try:
             t = yf.Ticker("^KS11")
             fp = float(t.fast_info.last_price or 0)
@@ -113,6 +114,30 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                 data["kospi"] = fp
         except Exception as e:
             logger.warning(f"KOSPI fast_info fallback 실패: {e}")
+
+    if data["kospi"] == 2500.0:
+        # fallback 2: yf.download (다른 내부 엔드포인트 사용)
+        try:
+            import pandas as pd
+            dl = yf.download("^KS11", period="5d", interval="1d", progress=False, auto_adjust=True)
+            if not dl.empty:
+                close = dl["Close"].dropna()
+                if not close.empty:
+                    fp = float(close.iloc[-1])
+                    if 1000 <= fp <= 5000:
+                        data["kospi"] = fp
+        except Exception as e:
+            logger.warning(f"KOSPI yf.download fallback 실패: {e}")
+
+    if data["kospi"] == 2500.0:
+        # fallback 3: Ticker.info regularMarketPrice
+        try:
+            info = yf.Ticker("^KS11").info
+            fp = float(info.get("regularMarketPrice") or info.get("currentPrice") or 0)
+            if 1000 <= fp <= 5000:
+                data["kospi"] = fp
+        except Exception as e:
+            logger.warning(f"KOSPI info fallback 실패: {e}")
 
     # FRED API에서 금리/CPI 수집
     if fred_api_key:
