@@ -102,12 +102,12 @@ export default function Step2Page() {
             <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 mt-1">
               <span>단기국채·MMF·예금 → <strong>단기채권</strong></span>
               <span>장기국채·회사채 → <strong>채권</strong></span>
-              <span>ETH·SOL·XRP 등 → <strong>암호화폐</strong></span>
+              <span>ETH·SOL·XRP·BNB 등 → <strong>암호화폐</strong></span>
               <span>BTC → <strong>비트코인</strong></span>
               <span>삼성전자·SK하이닉스 → <strong>국내주식</strong></span>
-              <span>엔비디아·애플·VOO·QQQ → <strong>해외주식</strong></span>
+              <span>엔비디아·애플·VOO·QQQ·SCHD → <strong>해외주식</strong></span>
               <span>금 ETF·KRX금현물 → <strong>금</strong></span>
-              <span>리츠·원자재 → <strong>대안자산</strong></span>
+              <span>리츠·원자재·리버리지ETF → <strong>대안자산</strong></span>
             </div>
           </div>
 

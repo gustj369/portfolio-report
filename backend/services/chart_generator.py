@@ -238,6 +238,11 @@ def generate_rebalancing_comparison_chart(
     if rec_total > 0:
         new_rec_sizes = [s / rec_total * 100 for s in new_rec_sizes]
 
+    # 추천 파이차트에서 0% 자산 제거 (라벨 겹침 방지)
+    filtered_rec = [(l, s) for l, s in zip(new_rec_labels, new_rec_sizes) if s > 0.05]
+    new_rec_labels = [x[0] for x in filtered_rec]
+    new_rec_sizes  = [x[1] for x in filtered_rec]
+
     max_labels = max(len(current_labels), len(new_rec_labels))
     colors = COLORS_PIE[:max_labels]
 

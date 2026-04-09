@@ -9,7 +9,7 @@ from services.simulator import calculate_risk_score
 # 리스크 성향별 목표 자산 배분 (%)
 _TARGET_ALLOC = {
     "안정형": {"equity": 35, "bond": 45, "cash": 20, "alt": 0},
-    "중립형": {"equity": 60, "bond": 25, "cash": 15, "alt": 0},
+    "중립형": {"equity": 60, "bond": 20, "cash": 15, "alt": 5},   # alt 0→5%, bond 25→20%
     "공격형": {"equity": 70, "bond": 10, "cash": 10, "alt": 10},
 }
 
@@ -78,7 +78,10 @@ def generate_personalized_content(
     # 위험자산(주식+대안) 기준으로 포트폴리오 성격 판단
     if risky_w >= 70:
         dominance = f"위험자산(주식·대안) {risky_w:.0f}%로 성장 중심"
-        structure_comment = "장기 복리 수익을 극대화할 수 있는 공격적 구조입니다."
+        if risk_grade == "공격형":
+            structure_comment = "장기 복리 수익을 극대화할 수 있는 공격적 구조입니다."
+        else:
+            structure_comment = "장기 복리 성장에 유리한 구조입니다."
     elif risky_w >= 50:
         dominance = f"위험자산 {risky_w:.0f}%·안전자산 {100 - risky_w:.0f}%의 균형형"
         structure_comment = "성장과 안정의 균형을 추구하는 구조입니다."
@@ -380,7 +383,19 @@ def _alt_reason(direction: str, asset_type: AssetType, asset_name: str, target_a
     type_name = _ALT_NAMES.get(asset_type, "대안자산")
     display = asset_name if asset_name else type_name
     if direction == "감소":
-        if asset_type in (AssetType.BITCOIN, AssetType.CRYPTO):
+        if recommended_w == 0:
+            # 완전 청산 케이스 — "목표(0%)" 표현 대신 명확한 이유 제공
+            if asset_type in (AssetType.BITCOIN, AssetType.CRYPTO):
+                return (
+                    f"{display}({current_w:.0f}%) 고변동성 암호화폐 — "
+                    f"현 성향 목표 배분에 포함되지 않아 단계적 정리 고려"
+                )
+            else:
+                return (
+                    f"{display}({current_w:.0f}%) — "
+                    f"현 성향 목표 배분에 포함되지 않아 채권·현금으로 전환 고려"
+                )
+        elif asset_type in (AssetType.BITCOIN, AssetType.CRYPTO):
             return (
                 f"{display}({current_w:.0f}%) 고변동성 암호화폐 — "
                 f"리스크 관리 차원에서 {recommended_w:.1f}%로 단계적 축소 권장"
