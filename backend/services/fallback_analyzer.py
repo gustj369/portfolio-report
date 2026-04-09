@@ -91,8 +91,9 @@ def generate_personalized_content(
     if equity_w > 0:
         comp_parts.append(f"주식 {equity_w:.0f}%")
     if alt_w > 0:
-        alt_names = {_ALT_NAMES.get(a.asset_type, "대안자산") for a in portfolio.allocations if a.asset_type in _ALT_TYPES}
-        comp_parts.append(f"{'·'.join(alt_names)} {alt_w:.0f}%")
+        alt_display = [a.asset_name if a.asset_name else _ALT_NAMES.get(a.asset_type, "대안자산")
+                       for a in portfolio.allocations if a.asset_type in _ALT_TYPES]
+        comp_parts.append(f"{'·'.join(alt_display[:3])} {alt_w:.0f}%")
     if bond_w > 0:
         comp_parts.append(f"채권 {bond_w:.0f}%")
     if cash_w > 0:
@@ -127,10 +128,10 @@ def generate_personalized_content(
     if equity_w > 0:
         held_types.append("주식")
     if alt_w > 0:
-        # 비트코인, 금 등 구체적 명칭 사용
+        # 실제 자산명 사용 (첫 번째 대안자산)
         for a in portfolio.allocations:
             if a.asset_type in _ALT_TYPES:
-                held_types.append(_ALT_NAMES.get(a.asset_type, "대안자산"))
+                held_types.append(a.asset_name if a.asset_name else _ALT_NAMES.get(a.asset_type, "대안자산"))
                 break
     if bond_w > 0:
         held_types.append("채권")
@@ -173,7 +174,7 @@ def generate_personalized_content(
                 f"손실 감내 능력 충분히 고려 필요"
             )
 
-    # 채권 부족
+    # 채권 부족 / 과다
     target_bond_w = target.get("bond", 0)
     if bond_w == 0:
         weaknesses.append("채권 0% — 금리 급등·경기침체 시 전체 포트폴리오 보호막 부재")
@@ -181,6 +182,11 @@ def generate_personalized_content(
         weaknesses.append(
             f"채권 비중 {bond_w:.0f}%로 {risk_grade} 목표({target_bond_w:.0f}%) 대비 미달 — "
             f"금리 급등·경기침체 시 방어력 부족"
+        )
+    elif bond_w > target_bond_w + 5 and risk_grade in ("공격형", "중립형"):
+        weaknesses.append(
+            f"채권 비중 {bond_w:.0f}%는 {risk_grade} 목표({target_bond_w:.0f}%) 대비 과다 — "
+            f"성장자산 비중 확대 여지, 장기 수익 기회비용 발생 가능"
         )
 
     # 해외자산 환노출
@@ -273,12 +279,15 @@ def _generate_rebalancing(portfolio: Portfolio, g: dict, target: dict, risk_grad
         for a in bond_allocs:
             new_w = round(max(0.0, min(60.0, a.weight + per_adj)), 1)
             direction = "증가" if new_w > a.weight + 0.5 else ("감소" if new_w < a.weight - 0.5 else "유지")
-            reason = (
-                f"고금리 환경에서 채권 매력 상승 — {risk_grade} 목표({target_bond:.0f}%) 향해 점진적 확대"
-                if direction == "증가" else
-                (f"{risk_grade} 목표({target_bond:.0f}%) 수준으로 조정" if direction == "감소" else
-                 f"{risk_grade} 목표({target_bond:.0f}%) 범위 내 적정")
-            )
+            if direction == "증가":
+                reason = f"고금리 환경에서 채권 매력 상승 — {risk_grade} 목표({target_bond:.0f}%) 향해 점진적 확대"
+            elif direction == "감소":
+                reason = (
+                    f"채권 {a.weight:.0f}%는 {risk_grade} 목표({target_bond:.0f}%) 대비 과다 — "
+                    f"채권 비중 축소 후 성장자산 재배분 고려"
+                )
+            else:
+                reason = f"{risk_grade} 목표({target_bond:.0f}%) 범위 내 적정"
             recs.append({"asset_name": a.asset_name, "current_weight": a.weight,
                           "recommended_weight": new_w, "direction": direction, "reason": reason})
             bond_rec_total += new_w
