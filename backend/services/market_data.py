@@ -87,6 +87,14 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                     # KOSPI: 합리적 범위 체크 (1000~5000)
                     if 1000 <= price <= 5000:
                         data["kospi"] = price
+                    else:
+                        # fast_info fallback
+                        try:
+                            fp = float(t.fast_info.last_price or 0)
+                            if 1000 <= fp <= 5000:
+                                data["kospi"] = fp
+                        except Exception:
+                            pass
                 elif key == "gold":
                     data["gold_price"] = price
                 elif key == "usd_krw":
@@ -95,6 +103,16 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                         data["usd_krw"] = price
         except Exception as e:
             logger.warning(f"시장 데이터 수집 실패 ({ticker}): {e}")
+
+    # KOSPI fast_info 최종 fallback (history가 비어있는 경우 대비)
+    if data["kospi"] == 2500.0:
+        try:
+            t = yf.Ticker("^KS11")
+            fp = float(t.fast_info.last_price or 0)
+            if 1000 <= fp <= 5000:
+                data["kospi"] = fp
+        except Exception as e:
+            logger.warning(f"KOSPI fast_info fallback 실패: {e}")
 
     # FRED API에서 금리/CPI 수집
     if fred_api_key:

@@ -174,10 +174,14 @@ def generate_personalized_content(
             )
 
     # 채권 부족
-    if bond_w < 10 and risk_grade in ("안정형", "중립형"):
-        weaknesses.append(f"채권 비중 {bond_w:.0f}%로 금리 급등 시 방어력 부족 — {target['bond']:.0f}% 수준 권장")
-    elif bond_w == 0:
+    target_bond_w = target.get("bond", 0)
+    if bond_w == 0:
         weaknesses.append("채권 0% — 금리 급등·경기침체 시 전체 포트폴리오 보호막 부재")
+    elif bond_w < target_bond_w - 5:
+        weaknesses.append(
+            f"채권 비중 {bond_w:.0f}%로 {risk_grade} 목표({target_bond_w:.0f}%) 대비 미달 — "
+            f"금리 급등·경기침체 시 방어력 부족"
+        )
 
     # 해외자산 환노출
     foreign_allocs = [a for a in portfolio.allocations if a.asset_type == AssetType.FOREIGN_STOCK]
@@ -306,7 +310,7 @@ def _generate_rebalancing(portfolio: Portfolio, g: dict, target: dict, risk_grad
         for a in alt_allocs:
             new_w = round(max(0.0, min(50.0, a.weight + per_adj)), 1)
             direction = "증가" if new_w > a.weight + 0.5 else ("감소" if new_w < a.weight - 0.5 else "유지")
-            reason = _alt_reason(direction, a.asset_type, target_alt, a.weight)
+            reason = _alt_reason(direction, a.asset_type, a.asset_name, target_alt, a.weight, new_w)
             recs.append({"asset_name": a.asset_name, "current_weight": a.weight,
                           "recommended_weight": new_w, "direction": direction, "reason": reason})
 
@@ -351,16 +355,23 @@ def _equity_reason(direction: str, risk_grade: str, target_equity: float) -> str
     return f"{risk_grade} 성향 목표 범위({target_equity:.0f}%±10%) 내 적정 수준"
 
 
-def _alt_reason(direction: str, asset_type: AssetType, target_alt: float, current_w: float) -> str:
-    name = _ALT_NAMES.get(asset_type, "대안자산")
+def _alt_reason(direction: str, asset_type: AssetType, asset_name: str, target_alt: float, current_w: float, recommended_w: float) -> str:
+    type_name = _ALT_NAMES.get(asset_type, "대안자산")
+    display = asset_name if asset_name else type_name
     if direction == "감소":
-        return (
-            f"{name} 집중도({current_w:.0f}%) 과도 — 극단적 변동성 리스크 감안해 "
-            f"목표({target_alt:.0f}%) 수준으로 단계적 축소 권장"
-        )
+        if asset_type in (AssetType.BITCOIN, AssetType.CRYPTO):
+            return (
+                f"{display}({current_w:.0f}%) 고변동성 암호화폐 — "
+                f"리스크 관리 차원에서 {recommended_w:.1f}%로 단계적 축소 권장"
+            )
+        else:
+            return (
+                f"{display}({current_w:.0f}%) 비중 과다 — "
+                f"전체 대안자산 목표({target_alt:.0f}%) 감안하여 {recommended_w:.1f}%로 조정 권장"
+            )
     elif direction == "증가":
-        return f"포트폴리오 다각화 목적으로 {name} {target_alt:.0f}% 수준 보유 고려"
-    return f"현재 {name} 비중 유지 (목표 비중 범위 내)"
+        return f"포트폴리오 다각화 목적으로 {display} {recommended_w:.1f}% 수준 보유 고려"
+    return f"현재 {display} 비중 적정 수준 유지"
 
 
 def _generate_market_commentary(
