@@ -138,6 +138,23 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
         except Exception as e:
             logger.warning(f"KOSPI info fallback 실패: {e}")
 
+    if data["kospi"] == 2500.0:
+        # fallback 4: 직접 HTTP 요청 (Yahoo Finance v8 API)
+        try:
+            resp = requests.get(
+                "https://query1.finance.yahoo.com/v8/finance/chart/%5EKS11?interval=1d&range=5d",
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+                timeout=10,
+            )
+            if resp.ok:
+                result = resp.json()["chart"]["result"][0]["meta"]
+                fp = float(result.get("regularMarketPrice") or result.get("previousClose") or 0)
+                if 1000 <= fp <= 5000:
+                    data["kospi"] = fp
+                    logger.info(f"KOSPI HTTP direct fallback 성공: {fp}")
+        except Exception as e:
+            logger.warning(f"KOSPI HTTP direct fallback 실패: {e}")
+
     # FRED API에서 금리/CPI 수집
     if fred_api_key:
         for key, series_id in FRED_SERIES.items():

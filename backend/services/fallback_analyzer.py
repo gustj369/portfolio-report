@@ -98,7 +98,9 @@ def generate_personalized_content(
                        for a in portfolio.allocations if a.asset_type in _ALT_TYPES]
         comp_parts.append(f"{'·'.join(alt_display[:3])} {alt_w:.0f}%")
     if bond_w > 0:
-        comp_parts.append(f"채권 {bond_w:.0f}%")
+        short_bond_w = sum(a.weight for a in portfolio.allocations if a.asset_type == AssetType.SHORT_BOND)
+        bond_label = "단기채권" if short_bond_w == bond_w else ("채권·단기채권" if short_bond_w > 0 else "채권")
+        comp_parts.append(f"{bond_label} {bond_w:.0f}%")
     if cash_w > 0:
         comp_parts.append(f"현금 {cash_w:.0f}%")
     comp_str = ", ".join(comp_parts)
@@ -294,12 +296,13 @@ def _generate_rebalancing(portfolio: Portfolio, g: dict, target: dict, risk_grad
         for a in bond_allocs:
             new_w = round(max(0.0, min(60.0, a.weight + per_adj)), 1)
             direction = "증가" if new_w > a.weight + 0.5 else ("감소" if new_w < a.weight - 0.5 else "유지")
+            asset_display = a.asset_name if a.asset_name else ("단기채권" if a.asset_type == AssetType.SHORT_BOND else "채권")
             if direction == "증가":
-                reason = f"고금리 환경에서 채권 매력 상승 — {risk_grade} 목표({target_bond:.0f}%) 향해 점진적 확대"
+                reason = f"고금리 환경에서 {asset_display} 매력 상승 — {risk_grade} 목표({target_bond:.0f}%) 향해 점진적 확대"
             elif direction == "감소":
                 reason = (
-                    f"채권 {a.weight:.0f}%는 {risk_grade} 목표({target_bond:.0f}%) 대비 과다 — "
-                    f"채권 비중 축소 후 성장자산 재배분 고려"
+                    f"{asset_display} {a.weight:.0f}%는 {risk_grade} 목표({target_bond:.0f}%) 대비 과다 — "
+                    f"비중 축소 후 성장자산 재배분 고려"
                 )
             else:
                 reason = f"{risk_grade} 목표({target_bond:.0f}%) 범위 내 적정"
