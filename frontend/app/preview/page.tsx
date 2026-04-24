@@ -42,15 +42,16 @@ export default function PreviewPage() {
       setOrderId(payRes.order_id);
 
       // 2. 자동 결제 승인 (무료 — 개발 모드)
+      const devPaymentKey = `dev_${Date.now()}`;
       const confirmRes = await confirmPayment({
-        payment_key: `dev_${Date.now()}`,
+        payment_key: devPaymentKey,
         order_id: payRes.order_id,
         amount: payRes.amount,
       });
 
       // 3. 리포트 생성 페이지로 이동
       router.push(
-        `/payment/complete?paymentKey=dev_${Date.now()}&orderId=${payRes.order_id}&amount=${payRes.amount}&token=${confirmRes.report_token}`
+        `/payment/complete?paymentKey=${devPaymentKey}&orderId=${payRes.order_id}&amount=${payRes.amount}&token=${confirmRes.report_token}`
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";

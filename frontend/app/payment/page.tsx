@@ -56,7 +56,13 @@ export default function PaymentPage() {
     setError("");
 
     try {
-      if (isRealTossKey && typeof window.TossPayments !== "undefined") {
+      if (isRealTossKey) {
+        // 실제 Toss 키인데 SDK가 로드되지 않은 경우 → 오류 표시 (개발 모드로 우회하지 않음)
+        if (typeof window.TossPayments === "undefined") {
+          setError("결제 모듈을 불러오지 못했습니다. 페이지를 새로고침 후 다시 시도해주세요.");
+          setIsLoading(false);
+          return;
+        }
         const toss = window.TossPayments(clientKey);
         await toss.requestPayment("카드", {
           amount,

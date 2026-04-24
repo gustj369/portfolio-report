@@ -47,7 +47,7 @@ class PaymentConfirmResponse(BaseModel):
 
 class PaymentStatusResponse(BaseModel):
     order_id: str
-    status: str  # pending / confirmed / failed
+    status: str  # pending / confirmed / unknown
 
 
 @router.post("/request", response_model=PaymentRequestResponse)
@@ -154,8 +154,9 @@ async def get_payment_status(order_id: str) -> PaymentStatusResponse:
     if storage_get(f"{_PENDING_PFX}{order_id}"):
         return PaymentStatusResponse(order_id=order_id, status="pending")
 
-    # confirmed 여부는 토큰 기준이므로 간단히 pending 없으면 confirmed로 간주
-    return PaymentStatusResponse(order_id=order_id, status="confirmed")
+    # confirmed 상태는 report_token 기준으로 저장되므로 order_id로 역조회 불가
+    # pending이 없으면 만료·미존재·승인완료 중 구분할 수 없어 unknown 반환
+    return PaymentStatusResponse(order_id=order_id, status="unknown")
 
 
 def get_confirmed_payment(report_token: str) -> dict | None:

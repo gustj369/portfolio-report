@@ -16,7 +16,15 @@ async def lifespan(app: FastAPI):
     logger.info("포트폴리오 AI 리포트 서버 시작")
     logger.info(f"Gemini API: {'설정됨' if settings.gemini_api_key else '미설정 (더미 모드)'}")
     logger.info(f"Toss Payments: {'설정됨' if settings.toss_client_key else '미설정 (개발 모드)'}")
-    logger.info(f"저장 방식: {'로컬' if settings.use_local_storage else 'AWS S3'}")
+    if settings.use_local_storage:
+        storage_label = "로컬 파일시스템"
+    elif settings.r2_account_id and settings.r2_access_key:
+        storage_label = "Cloudflare R2"
+    elif settings.aws_access_key_id:
+        storage_label = "AWS S3"
+    else:
+        storage_label = "로컬 파일시스템 (fallback)"
+    logger.info(f"저장 방식: {storage_label}")
     yield
     logger.info("서버 종료")
 

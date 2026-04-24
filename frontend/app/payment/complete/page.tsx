@@ -166,7 +166,8 @@ function CompletePageContent() {
 
           {state.userProfile.email && (
             <div className="text-sm text-gray-500 mb-6">
-              📧 <strong>{state.userProfile.email}</strong>으로도 발송되었습니다.
+              📧 <strong>{state.userProfile.email}</strong>으로 발송을 시도했습니다.
+              <span className="block text-xs text-gray-400 mt-0.5">(이메일 미수신 시 PDF 다운로드를 이용해주세요)</span>
             </div>
           )}
 
