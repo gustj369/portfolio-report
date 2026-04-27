@@ -3,7 +3,10 @@ ReportLab 기반 5페이지 PDF 리포트 생성
 """
 import io
 import os
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+# Render 서버는 UTC 기준 — PDF에 표시되는 날짜/시간은 KST(UTC+9)로 고정
+KST = timezone(timedelta(hours=9))
 from xml.sax.saxutils import escape as _xe  # XML 특수문자 이스케이프 (&→&amp; 등)
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
@@ -257,7 +260,7 @@ def _build_cover_page(
         [Paragraph("포트폴리오 AI 분석 리포트", styles["cover_title"])],
         [Paragraph("AI 기반 맞춤형 자산 배분 진단", styles["cover_subtitle"])],
         [Spacer(1, 8)],
-        [Paragraph(f"생성일: {datetime.now().strftime('%Y년 %m월 %d일')}", styles["cover_body"])],
+        [Paragraph(f"생성일: {datetime.now(KST).strftime('%Y년 %m월 %d일')}", styles["cover_body"])],
     ]
     banner_table = Table(banner_data, colWidths=[PAGE_WIDTH - 2 * MARGIN])
     banner_table.setStyle(TableStyle([
@@ -317,7 +320,7 @@ def _build_cover_page(
         ["리스크 성향", user_profile.risk_tolerance.value],
         ["총 투자 자산", f"{portfolio.total_asset:,}만원"],
         ["월 적립액", f"{portfolio.monthly_saving:,}만원"],
-        ["분석 기준일", datetime.now().strftime("%Y년 %m월 %d일")],
+        ["분석 기준일", datetime.now(KST).strftime("%Y년 %m월 %d일")],
     ]
     info_table = Table(info_data, colWidths=[80 * mm, PAGE_WIDTH - 2 * MARGIN - 80 * mm])
     info_table.setStyle(TableStyle([
@@ -710,7 +713,7 @@ def _build_market_page(
         "모든 투자에는 원금 손실의 위험이 있으며, 과거의 수익률이 미래의 수익을 보장하지 않습니다.",
         "본 리포트에 포함된 시뮬레이션 결과는 예상치이며 실제 결과와 다를 수 있습니다.",
         "투자 결정은 본인의 판단과 책임 하에 이루어져야 하며, 필요 시 공인 재무설계사 또는 투자 전문가의 상담을 받으시기 바랍니다.",
-        f"리포트 생성일: {datetime.now().strftime('%Y년 %m월 %d일')} | 자산배분 AI (정보 제공 서비스)",
+        f"리포트 생성일: {datetime.now(KST).strftime('%Y년 %m월 %d일')} | 자산배분 AI (정보 제공 서비스)",
     ]
     for text in disclaimer_texts:
         story.append(Paragraph(text, styles["disclaimer"]))
@@ -771,7 +774,7 @@ def _add_header_footer(canvas_obj: canvas.Canvas, doc: SimpleDocTemplate):
     canvas_obj.drawRightString(
         PAGE_WIDTH - MARGIN,
         PAGE_HEIGHT - 8 * mm,
-        datetime.now().strftime("%Y.%m.%d"),
+        datetime.now(KST).strftime("%Y.%m.%d"),
     )
 
     # 푸터

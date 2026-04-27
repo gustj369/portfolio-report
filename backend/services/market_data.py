@@ -4,7 +4,10 @@ Yahoo Finance + FRED API 기반
 """
 import yfinance as yf
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+# PDF에 표시되는 데이터 기준일은 KST(UTC+9)로 고정
+KST = timezone(timedelta(hours=9))
 from typing import Optional
 import logging
 
@@ -318,7 +321,7 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
         usd_krw=data["usd_krw"],
         gold_price=data["gold_price"],
         cpi_us=data["cpi_us"],
-        fetched_at=datetime.now(),
+        fetched_at=datetime.now(KST),
     )
 
 
