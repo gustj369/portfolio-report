@@ -383,7 +383,8 @@ def _build_portfolio_page(
             f"{amount:,.0f}만원",
         ])
 
-    asset_table = Table(table_data, colWidths=[70 * mm, 40 * mm, 30 * mm, 50 * mm])
+    # 유효 너비 170mm (A4 210mm - 좌우 마진 20mm×2)
+    asset_table = Table(table_data, colWidths=[58 * mm, 40 * mm, 22 * mm, 50 * mm])
     asset_table.setStyle(_compact_table_style())
     story.append(asset_table)
     story.append(Spacer(1, 4))
