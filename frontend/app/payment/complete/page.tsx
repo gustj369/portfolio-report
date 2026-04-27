@@ -306,10 +306,10 @@ function CompletePageContent() {
 
         {isSlowWarning ? (
           <p className="text-xs text-amber-500 mt-6">
-            예상보다 시간이 걸리고 있습니다. 잠시만 기다려주세요...
+            AI 분석에 시간이 더 걸리고 있습니다 (최대 3분)
           </p>
         ) : (
-          <p className="text-xs text-gray-400 mt-6">약 15~30초 소요됩니다</p>
+          <p className="text-xs text-gray-400 mt-6">약 30초~1분 소요됩니다</p>
         )}
       </div>
     </div>
