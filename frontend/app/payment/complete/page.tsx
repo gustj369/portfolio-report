@@ -223,6 +223,11 @@ function CompletePageContent() {
               재시도 후에도 같은 문제가 반복되면 고객센터에 문의해주세요.
             </p>
           )}
+          {errorCode === "server" && (
+            <p className="text-xs text-gray-400 mb-4">
+              잠시 후 다시 시도해주세요. 문제가 지속되면 고객센터에 문의해주세요.
+            </p>
+          )}
           <button
             onClick={() => window.location.reload()}
             className="btn-gold mb-3 w-full"

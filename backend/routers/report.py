@@ -98,6 +98,8 @@ async def generate_report(
         logger.info(f"[{body.report_token}] 이전 실패({existing.error_message}) → 재생성 시작")
 
     # PENDING 중복 생성 방지: 5분 이내 PENDING 재요청은 건너뜀
+    # 배경 태스크 첫 줄에서 즉시 GENERATING으로 전환하므로 PENDING 체류는 수초 이내가 정상.
+    # 5분을 초과한 PENDING은 서버 재시작 등으로 태스크가 유실된 경우 → 재생성 허용.
     if existing and existing.status == ReportStatus.PENDING:
         try:
             now = datetime.now(KST)
