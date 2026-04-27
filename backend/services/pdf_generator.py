@@ -369,6 +369,8 @@ def _build_portfolio_page(
         chart_img = Image(io.BytesIO(pie_chart_bytes), width=120 * mm, height=58 * mm)
         story.append(chart_img)
         story.append(Spacer(1, 2))
+    else:
+        story.append(Paragraph("(차트 생성 실패 — 아래 자산 구성 표를 참고하세요)", styles["caption"]))
 
     # 자산 배분 테이블 (compact 패딩)
     story.append(Paragraph("자산 구성", styles["subsection_title"]))
@@ -539,11 +541,15 @@ def _build_simulation_page(
         chart_img = Image(io.BytesIO(line_chart_bytes), width=155 * mm, height=78 * mm)
         story.append(chart_img)
         story.append(Spacer(1, 8))
+    else:
+        story.append(Paragraph("(시뮬레이션 차트 생성 실패 — 위 시나리오 표를 참고하세요)", styles["caption"]))
 
     # 스택 바 차트
     if stacked_bar_bytes:
         bar_img = Image(io.BytesIO(stacked_bar_bytes), width=130 * mm, height=78 * mm)
         story.append(bar_img)
+    else:
+        story.append(Paragraph("(연도별 자산 구성 차트 생성 실패)", styles["caption"]))
 
     return story
 
@@ -569,6 +575,8 @@ def _build_rebalancing_page(
         chart_img = Image(io.BytesIO(rebalancing_chart_bytes), width=155 * mm, height=68 * mm)
         story.append(chart_img)
         story.append(Spacer(1, 8))
+    elif not rebalancing_chart_bytes and not all_same:
+        story.append(Paragraph("(리밸런싱 비교 차트 생성 실패 — 아래 조정 표를 참고하세요)", styles["caption"]))
     elif all_same:
         story.append(Paragraph(
             "현재 포트폴리오 비중이 리스크 성향 및 시장 상황에 적합하여 별도 리밸런싱이 필요하지 않습니다.",
