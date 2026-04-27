@@ -76,7 +76,6 @@ function CompletePageContent() {
     (async () => {
       try {
         let token: string;
-        let skipGenerate = false; // 새로고침 복구 시 generateReport 중복 호출 방지
 
         // 새로고침 복구: sessionStorage에 토큰이 남아있으면 confirm 단계 건너뜀
         const cachedToken = sessionStorage.getItem(`rpt_${orderId}`);
@@ -86,7 +85,8 @@ function CompletePageContent() {
           setLocalReportToken(token);
           setReportToken(token);
           setCurrentStep(1);
-          skipGenerate = true; // 이전 세션에서 이미 generateReport 호출됨
+          // generateReport는 항상 호출 — 백엔드가 GENERATING/READY이면 조기 반환으로 중복 방지
+          // skipGenerate 제거: 백엔드 PENDING 태스크 유실 시 재시도 없이 3분 타임아웃 되는 엣지 케이스 해소
         } else if (preConfirmedToken) {
           // 무료 플로우: 이미 confirm 완료된 토큰 사용
           setCurrentStep(0);
@@ -124,9 +124,7 @@ function CompletePageContent() {
         // 2. 리포트 생성 시작
         setCurrentStep(1);
         setPhase("generating");
-        if (!skipGenerate) {
-          await generateReport(token);
-        }
+        await generateReport(token);
 
         // 3. 상태 폴링
         let attempts = 0;
@@ -141,7 +139,7 @@ function CompletePageContent() {
             return;
           }
           attempts++;
-          if (attempts === 20) setIsSlowWarning(true); // 약 60초 경과 시 안내
+          if (attempts === 10) setIsSlowWarning(true); // 약 30초 경과 시 안내
 
           let status;
           try {

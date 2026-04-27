@@ -187,12 +187,13 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                     vals = [v.strip() for v in lines[1].split(",")]
                     close_idx = cols.index("Close") if "Close" in cols else 4
                     date_idx = cols.index("Date") if "Date" in cols else 1
-                    raw_close = vals[close_idx]
-                    # N/A 방어: stooq이 장 중단·데이터 없음 시 "N/A" 반환 → float() 예외 방지
-                    if raw_close in ("N/A", "-", "", "null"):
+                    # 열 수 부족 방어: 빈 행 or 컬럼 누락 시 IndexError 방지
+                    if len(vals) <= max(close_idx, date_idx):
+                        logger.warning("KOSPI stooq 열 수 부족 — 건너뜀")
+                    elif vals[close_idx] in ("N/A", "-", "", "null"):
                         logger.warning("KOSPI stooq N/A 수신 — 건너뜀")
                     else:
-                        fp = float(raw_close)
+                        fp = float(vals[close_idx])
                         raw_date = vals[date_idx]
                         if raw_date in ("N/A", "-", "", "null"):
                             logger.warning("KOSPI stooq 날짜 N/A — 건너뜀")
@@ -230,11 +231,12 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                     vals = [v.strip() for v in lines[1].split(",")]
                     close_idx = cols.index("Close") if "Close" in cols else 4
                     date_idx = cols.index("Date") if "Date" in cols else 1
-                    raw_close = vals[close_idx]
-                    if raw_close in ("N/A", "-", "", "null"):
+                    if len(vals) <= max(close_idx, date_idx):
+                        logger.warning("SP500 stooq 열 수 부족 — 건너뜀")
+                    elif vals[close_idx] in ("N/A", "-", "", "null"):
                         logger.warning("SP500 stooq N/A 수신 — 건너뜀")
                     else:
-                        fp = float(raw_close)
+                        fp = float(vals[close_idx])
                         raw_date = vals[date_idx]
                         if raw_date in ("N/A", "-", "", "null"):
                             logger.warning("SP500 stooq 날짜 N/A — 건너뜀")
@@ -271,11 +273,12 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                     vals = [v.strip() for v in lines[1].split(",")]
                     close_idx = cols.index("Close") if "Close" in cols else 4
                     date_idx = cols.index("Date") if "Date" in cols else 1
-                    raw_close = vals[close_idx]
-                    if raw_close in ("N/A", "-", "", "null"):
+                    if len(vals) <= max(close_idx, date_idx):
+                        logger.warning("USD/KRW stooq 열 수 부족 — 건너뜀")
+                    elif vals[close_idx] in ("N/A", "-", "", "null"):
                         logger.warning("USD/KRW stooq N/A 수신 — 건너뜀")
                     else:
-                        krw = float(raw_close)
+                        krw = float(vals[close_idx])
                         # 역단위 자동 보정: stooq이 KRW/USD(≈0.00072) 대신 USD/KRW(≈1380) 반환 보장
                         if 0 < krw < 1:
                             krw = round(1 / krw, 2)
@@ -336,11 +339,12 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                     vals = [v.strip() for v in lines[1].split(",")]
                     close_idx = cols.index("Close") if "Close" in cols else 4
                     date_idx = cols.index("Date") if "Date" in cols else 1
-                    raw_close = vals[close_idx]
-                    if raw_close in ("N/A", "-", "", "null"):
+                    if len(vals) <= max(close_idx, date_idx):
+                        logger.warning("금 stooq 열 수 부족 — 건너뜀")
+                    elif vals[close_idx] in ("N/A", "-", "", "null"):
                         logger.warning("금 stooq N/A 수신 — 건너뜀")
                     else:
-                        fp = float(raw_close)
+                        fp = float(vals[close_idx])
                         raw_date = vals[date_idx]
                         if raw_date in ("N/A", "-", "", "null"):
                             logger.warning("금 stooq 날짜 N/A — 건너뜀")
