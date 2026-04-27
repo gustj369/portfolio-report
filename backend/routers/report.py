@@ -86,7 +86,7 @@ async def generate_report(
     if not payment:
         raise HTTPException(status_code=403, detail="유효하지 않은 리포트 토큰입니다.")
 
-    # 이미 생성 중/완료인 경우
+    # 이미 생성 중/완료인 경우 — GENERATING/READY만 차단, ERROR/PENDING은 재시도 허용
     existing = _load_record(body.report_token)
     if existing and existing.status in (ReportStatus.GENERATING, ReportStatus.READY):
         return GenerateReportResponse(
@@ -94,8 +94,10 @@ async def generate_report(
             status=existing.status.value,
             message="이미 처리 중이거나 완료된 요청입니다.",
         )
+    if existing and existing.status == ReportStatus.ERROR:
+        logger.info(f"[{body.report_token}] 이전 실패({existing.error_message}) → 재생성 시작")
 
-    # 새 리포트 레코드 생성
+    # 새 리포트 레코드 생성 (기존 ERROR/PENDING 레코드 덮어쓰기)
     record = ReportRecord(
         order_id=payment["order_id"],
         report_token=body.report_token,

@@ -213,7 +213,12 @@ function CompletePageContent() {
         <div className="max-w-md w-full card text-center">
           <div className="text-5xl mb-4">❌</div>
           <h1 className="text-xl font-bold text-navy mb-2">오류가 발생했습니다</h1>
-          <p className="text-gray-500 text-sm mb-6">{errorMsg}</p>
+          <p className="text-gray-500 text-sm mb-4">{errorMsg}</p>
+          {errorMsg.includes("시간이 초과") && (
+            <p className="text-xs text-gray-400 mb-4">
+              재시도 후에도 같은 문제가 반복되면 고객센터에 문의해주세요.
+            </p>
+          )}
           <button
             onClick={() => window.location.reload()}
             className="btn-gold mb-3 w-full"
