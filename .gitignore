@@ -17,6 +17,7 @@ build/
 
 # 생성된 PDF 파일
 backend/generated_reports/
+backend/test_*.pdf
 
 # Node.js
 node_modules/
