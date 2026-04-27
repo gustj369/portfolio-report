@@ -193,40 +193,6 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
         except Exception as e:
             logger.warning(f"KOSPI stooq fallback 실패: {e}")
 
-    if data["kospi"] == 2500.0:
-        # fallback 6: 직접 HTTP 요청 (Yahoo Finance v8 API query1)
-        try:
-            resp = requests.get(
-                "https://query1.finance.yahoo.com/v8/finance/chart/%5EKS11?interval=1d&range=5d",
-                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
-                timeout=10,
-            )
-            if resp.ok:
-                result = resp.json()["chart"]["result"][0]["meta"]
-                fp = float(result.get("regularMarketPrice") or result.get("previousClose") or 0)
-                if 1000 <= fp <= 5000:
-                    data["kospi"] = fp
-                    logger.info(f"KOSPI Yahoo query1 fallback 성공: {fp}")
-        except Exception as e:
-            logger.warning(f"KOSPI Yahoo query1 fallback 실패: {e}")
-
-    if data["kospi"] == 2500.0:
-        # fallback 7: Yahoo Finance v8 API query2 (query1과 별도 엔드포인트)
-        try:
-            resp = requests.get(
-                "https://query2.finance.yahoo.com/v8/finance/chart/%5EKS11?interval=1d&range=5d",
-                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
-                timeout=10,
-            )
-            if resp.ok:
-                result = resp.json()["chart"]["result"][0]["meta"]
-                fp = float(result.get("regularMarketPrice") or result.get("previousClose") or 0)
-                if 1000 <= fp <= 5000:
-                    data["kospi"] = fp
-                    logger.info(f"KOSPI Yahoo query2 fallback 성공: {fp}")
-        except Exception as e:
-            logger.warning(f"KOSPI Yahoo query2 fallback 실패: {e}")
-
     # KOSPI 최종 상태 로그 (Render 로그에서 확인용)
     if data["kospi"] == 2500.0:
         logger.warning("KOSPI 전체 fallback 실패 — 기본값 2500 사용 중")

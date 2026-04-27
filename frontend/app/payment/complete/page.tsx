@@ -75,6 +75,7 @@ function CompletePageContent() {
     (async () => {
       try {
         let token: string;
+        let skipGenerate = false; // 새로고침 복구 시 generateReport 중복 호출 방지
 
         // 새로고침 복구: sessionStorage에 토큰이 남아있으면 confirm 단계 건너뜀
         const cachedToken = sessionStorage.getItem(`rpt_${orderId}`);
@@ -84,7 +85,7 @@ function CompletePageContent() {
           setLocalReportToken(token);
           setReportToken(token);
           setCurrentStep(1);
-          // generateReport는 이미 처리 중/완료인 경우 그대로 반환하므로 재호출해도 안전
+          skipGenerate = true; // 이전 세션에서 이미 generateReport 호출됨
         } else if (preConfirmedToken) {
           // 무료 플로우: 이미 confirm 완료된 토큰 사용
           setCurrentStep(0);
@@ -114,7 +115,9 @@ function CompletePageContent() {
         // 2. 리포트 생성 시작
         setCurrentStep(1);
         setPhase("generating");
-        await generateReport(token);
+        if (!skipGenerate) {
+          await generateReport(token);
+        }
 
         // 3. 상태 폴링
         let attempts = 0;
@@ -122,6 +125,7 @@ function CompletePageContent() {
 
         const poll = async () => {
           if (attempts >= maxAttempts) {
+            sessionStorage.removeItem(`rpt_${orderId}`);
             setPhase("error");
             setErrorMsg("리포트 생성 시간이 초과되었습니다. 고객센터에 문의해주세요.");
             return;
@@ -144,6 +148,7 @@ function CompletePageContent() {
             setCurrentStep(5);
             sessionStorage.removeItem(`rpt_${orderId}`);
           } else if (status.status === "error") {
+            sessionStorage.removeItem(`rpt_${orderId}`);
             setPhase("error");
             setErrorMsg(status.error_message || "리포트 생성 중 오류가 발생했습니다.");
           } else {
@@ -153,6 +158,7 @@ function CompletePageContent() {
 
         setTimeout(poll, 2000);
       } catch (e) {
+        sessionStorage.removeItem(`rpt_${orderId}`);
         setPhase("error");
         setErrorMsg(e instanceof Error ? e.message : "처리 중 오류가 발생했습니다.");
       }
