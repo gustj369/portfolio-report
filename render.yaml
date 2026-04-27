@@ -39,3 +39,5 @@ services:
         sync: false
       - key: REPORT_PRICE_KRW
         value: "0"           # 무료
+      - key: TZ
+        value: Asia/Seoul    # 서버 시간대 KST 고정 (로그·타임스탬프 혼선 방지)

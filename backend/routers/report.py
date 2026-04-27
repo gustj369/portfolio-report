@@ -5,7 +5,9 @@ PDF 리포트 생성 라우터
 import uuid
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+KST = timezone(timedelta(hours=9))
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
@@ -98,7 +100,7 @@ async def generate_report(
         order_id=payment["order_id"],
         report_token=body.report_token,
         status=ReportStatus.PENDING,
-        created_at=datetime.now(),
+        created_at=datetime.now(KST),
     )
     _save_record(record)
 
@@ -257,7 +259,7 @@ async def _generate_report_background(
         # 7. 완료 처리
         record.status = ReportStatus.READY
         record.download_url = download_url
-        record.completed_at = datetime.now()
+        record.completed_at = datetime.now(KST)
         _save_record(record)
         logger.info(f"[{report_token}] 리포트 생성 완료: {download_url}")
 
