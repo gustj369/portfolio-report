@@ -193,6 +193,34 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
         except Exception as e:
             logger.warning(f"KOSPI stooq fallback 실패: {e}")
 
+    if data["kospi"] == 2500.0:
+        # fallback 7: Naver Finance (stooq·Yahoo Finance와 완전히 독립된 국내 소스)
+        # API 키 불필요 — 네이버 금융 모바일 앱이 사용하는 공개 JSON 엔드포인트
+        try:
+            resp = requests.get(
+                "https://m.stock.naver.com/api/index/KOSPI/price",
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                    "Referer": "https://m.stock.naver.com/",
+                },
+                timeout=10,
+            )
+            if resp.ok:
+                price_data = resp.json()
+                # closePrice는 "2,547.42" 형식 (콤마 제거 필요)
+                raw = (
+                    price_data.get("closePrice")
+                    or price_data.get("currentPrice")
+                    or price_data.get("nv")
+                    or "0"
+                )
+                fp = float(str(raw).replace(",", ""))
+                if 1000 <= fp <= 5000:
+                    data["kospi"] = fp
+                    logger.info(f"KOSPI Naver Finance fallback 성공: {fp}")
+        except Exception as e:
+            logger.warning(f"KOSPI Naver Finance fallback 실패: {e}")
+
     # KOSPI 최종 상태 로그 (Render 로그에서 확인용)
     if data["kospi"] == 2500.0:
         logger.warning("KOSPI 전체 fallback 실패 — 기본값 2500 사용 중")
