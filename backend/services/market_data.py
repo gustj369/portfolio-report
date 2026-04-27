@@ -218,6 +218,9 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                 if 1000 <= fp <= 5000:
                     data["kospi"] = fp
                     logger.info(f"KOSPI Naver Finance fallback 성공: {fp}")
+                elif fp == 0:
+                    # 필드명 불일치 진단 — Render 로그에서 실제 키 확인 가능
+                    logger.warning(f"KOSPI Naver Finance 필드명 불일치 — 응답 키: {list(price_data.keys())[:8]}")
         except Exception as e:
             logger.warning(f"KOSPI Naver Finance fallback 실패: {e}")
 
@@ -226,6 +229,66 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
         logger.warning("KOSPI 전체 fallback 실패 — 기본값 2500 사용 중")
     else:
         logger.info(f"KOSPI 최종값: {data['kospi']:.2f}")
+
+    # ── SP500 fallback ────────────────────────────────────────
+    if data["sp500"] == 5000.0:
+        try:
+            resp = requests.get(
+                "https://stooq.com/q/l/?s=%5Espx&f=sd2t2ohlcv&h&e=csv",
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=10,
+            )
+            if resp.ok and resp.text:
+                lines = resp.text.strip().split("\n")
+                if len(lines) >= 2:
+                    cols = [c.strip() for c in lines[0].split(",")]
+                    vals = [v.strip() for v in lines[1].split(",")]
+                    close_idx = cols.index("Close") if "Close" in cols else 4
+                    fp = float(vals[close_idx])
+                    if 1000 <= fp <= 10000:
+                        data["sp500"] = fp
+                        logger.info(f"SP500 stooq fallback 성공: {fp}")
+        except Exception as e:
+            logger.warning(f"SP500 stooq fallback 실패: {e}")
+
+    # ── USD/KRW fallback ──────────────────────────────────────
+    if data["usd_krw"] == 1350.0:
+        # open.er-api.com — 무료, 인증 불필요, Yahoo Finance와 완전 독립
+        try:
+            resp = requests.get(
+                "https://open.er-api.com/v6/latest/USD",
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=10,
+            )
+            if resp.ok:
+                krw = float(resp.json().get("rates", {}).get("KRW", 0))
+                if 800 <= krw <= 2000:
+                    data["usd_krw"] = krw
+                    logger.info(f"USD/KRW open.er-api fallback 성공: {krw}")
+        except Exception as e:
+            logger.warning(f"USD/KRW open.er-api fallback 실패: {e}")
+
+    # ── 금값 fallback ─────────────────────────────────────────
+    if data["gold_price"] == 2300.0:
+        # stooq.com XAU/USD (트로이 온스 기준 달러 가격)
+        try:
+            resp = requests.get(
+                "https://stooq.com/q/l/?s=xauusd&f=sd2t2ohlcv&h&e=csv",
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=10,
+            )
+            if resp.ok and resp.text:
+                lines = resp.text.strip().split("\n")
+                if len(lines) >= 2:
+                    cols = [c.strip() for c in lines[0].split(",")]
+                    vals = [v.strip() for v in lines[1].split(",")]
+                    close_idx = cols.index("Close") if "Close" in cols else 4
+                    fp = float(vals[close_idx])
+                    if 500 <= fp <= 5000:
+                        data["gold_price"] = fp
+                        logger.info(f"금 stooq fallback 성공: {fp}")
+        except Exception as e:
+            logger.warning(f"금 stooq fallback 실패: {e}")
 
     # FRED API에서 금리/CPI 수집
     if fred_api_key:
