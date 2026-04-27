@@ -142,62 +142,7 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
             logger.warning(f"KOSPI info fallback 실패: {e}")
 
     if data["kospi"] == 2500.0:
-        # fallback 4: 직접 HTTP 요청 (Yahoo Finance v8 API query1)
-        try:
-            resp = requests.get(
-                "https://query1.finance.yahoo.com/v8/finance/chart/%5EKS11?interval=1d&range=5d",
-                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
-                timeout=10,
-            )
-            if resp.ok:
-                result = resp.json()["chart"]["result"][0]["meta"]
-                fp = float(result.get("regularMarketPrice") or result.get("previousClose") or 0)
-                if 1000 <= fp <= 5000:
-                    data["kospi"] = fp
-                    logger.info(f"KOSPI Yahoo query1 fallback 성공: {fp}")
-        except Exception as e:
-            logger.warning(f"KOSPI Yahoo query1 fallback 실패: {e}")
-
-    if data["kospi"] == 2500.0:
-        # fallback 5: Yahoo Finance v8 API query2 (query1과 별도 엔드포인트)
-        try:
-            resp = requests.get(
-                "https://query2.finance.yahoo.com/v8/finance/chart/%5EKS11?interval=1d&range=5d",
-                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
-                timeout=10,
-            )
-            if resp.ok:
-                result = resp.json()["chart"]["result"][0]["meta"]
-                fp = float(result.get("regularMarketPrice") or result.get("previousClose") or 0)
-                if 1000 <= fp <= 5000:
-                    data["kospi"] = fp
-                    logger.info(f"KOSPI Yahoo query2 fallback 성공: {fp}")
-        except Exception as e:
-            logger.warning(f"KOSPI Yahoo query2 fallback 실패: {e}")
-
-    if data["kospi"] == 2500.0:
-        # fallback 6: stooq.com CSV (Yahoo Finance와 완전히 독립적인 데이터 소스)
-        try:
-            resp = requests.get(
-                "https://stooq.com/q/l/?s=%5eks11&f=sd2t2ohlcv&h&e=csv",
-                headers={"User-Agent": "Mozilla/5.0"},
-                timeout=10,
-            )
-            if resp.ok and resp.text:
-                lines = resp.text.strip().split("\n")
-                if len(lines) >= 2:
-                    cols = [c.strip() for c in lines[0].split(",")]
-                    vals = [v.strip() for v in lines[1].split(",")]
-                    close_idx = cols.index("Close") if "Close" in cols else 4
-                    fp = float(vals[close_idx])
-                    if 1000 <= fp <= 5000:
-                        data["kospi"] = fp
-                        logger.info(f"KOSPI stooq fallback 성공: {fp}")
-        except Exception as e:
-            logger.warning(f"KOSPI stooq fallback 실패: {e}")
-
-    if data["kospi"] == 2500.0:
-        # fallback 7: Naver Finance (stooq·Yahoo Finance와 완전히 독립된 국내 소스)
+        # fallback 4: Naver Finance (Yahoo Finance와 완전히 독립된 국내 소스 — 가장 안정적)
         # API 키 불필요 — 네이버 금융 모바일 앱이 사용하는 공개 JSON 엔드포인트
         try:
             resp = requests.get(
@@ -226,6 +171,61 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                     logger.warning(f"KOSPI Naver Finance 필드명 불일치 — 응답 키: {list(price_data.keys())[:8]}")
         except Exception as e:
             logger.warning(f"KOSPI Naver Finance fallback 실패: {e}")
+
+    if data["kospi"] == 2500.0:
+        # fallback 5: stooq.com CSV (Yahoo Finance·Naver와 완전히 독립적인 유럽 데이터 소스)
+        try:
+            resp = requests.get(
+                "https://stooq.com/q/l/?s=%5eks11&f=sd2t2ohlcv&h&e=csv",
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=10,
+            )
+            if resp.ok and resp.text:
+                lines = resp.text.strip().split("\n")
+                if len(lines) >= 2:
+                    cols = [c.strip() for c in lines[0].split(",")]
+                    vals = [v.strip() for v in lines[1].split(",")]
+                    close_idx = cols.index("Close") if "Close" in cols else 4
+                    fp = float(vals[close_idx])
+                    if 1000 <= fp <= 5000:
+                        data["kospi"] = fp
+                        logger.info(f"KOSPI stooq fallback 성공: {fp}")
+        except Exception as e:
+            logger.warning(f"KOSPI stooq fallback 실패: {e}")
+
+    if data["kospi"] == 2500.0:
+        # fallback 6: 직접 HTTP 요청 (Yahoo Finance v8 API query1)
+        try:
+            resp = requests.get(
+                "https://query1.finance.yahoo.com/v8/finance/chart/%5EKS11?interval=1d&range=5d",
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+                timeout=10,
+            )
+            if resp.ok:
+                result = resp.json()["chart"]["result"][0]["meta"]
+                fp = float(result.get("regularMarketPrice") or result.get("previousClose") or 0)
+                if 1000 <= fp <= 5000:
+                    data["kospi"] = fp
+                    logger.info(f"KOSPI Yahoo query1 fallback 성공: {fp}")
+        except Exception as e:
+            logger.warning(f"KOSPI Yahoo query1 fallback 실패: {e}")
+
+    if data["kospi"] == 2500.0:
+        # fallback 7: Yahoo Finance v8 API query2 (query1과 별도 엔드포인트)
+        try:
+            resp = requests.get(
+                "https://query2.finance.yahoo.com/v8/finance/chart/%5EKS11?interval=1d&range=5d",
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+                timeout=10,
+            )
+            if resp.ok:
+                result = resp.json()["chart"]["result"][0]["meta"]
+                fp = float(result.get("regularMarketPrice") or result.get("previousClose") or 0)
+                if 1000 <= fp <= 5000:
+                    data["kospi"] = fp
+                    logger.info(f"KOSPI Yahoo query2 fallback 성공: {fp}")
+        except Exception as e:
+            logger.warning(f"KOSPI Yahoo query2 fallback 실패: {e}")
 
     # KOSPI 최종 상태 로그 (Render 로그에서 확인용)
     if data["kospi"] == 2500.0:

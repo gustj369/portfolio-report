@@ -76,12 +76,22 @@ function CompletePageContent() {
       try {
         let token: string;
 
-        if (preConfirmedToken) {
+        // 새로고침 복구: sessionStorage에 토큰이 남아있으면 confirm 단계 건너뜀
+        const cachedToken = sessionStorage.getItem(`rpt_${orderId}`);
+
+        if (cachedToken) {
+          token = cachedToken;
+          setLocalReportToken(token);
+          setReportToken(token);
+          setCurrentStep(1);
+          // generateReport는 이미 처리 중/완료인 경우 그대로 반환하므로 재호출해도 안전
+        } else if (preConfirmedToken) {
           // 무료 플로우: 이미 confirm 완료된 토큰 사용
           setCurrentStep(0);
           token = preConfirmedToken;
           setLocalReportToken(token);
           setReportToken(token);
+          sessionStorage.setItem(`rpt_${orderId}`, token);
         } else {
           // 유료 플로우: Toss 결제 승인
           if (!paymentKey) {
@@ -98,6 +108,7 @@ function CompletePageContent() {
           token = confirmResult.report_token;
           setLocalReportToken(token);
           setReportToken(token);
+          sessionStorage.setItem(`rpt_${orderId}`, token);
         }
 
         // 2. 리포트 생성 시작
@@ -131,6 +142,7 @@ function CompletePageContent() {
             setDownloadUrl(resolvedUrl);
             setPhase("done");
             setCurrentStep(5);
+            sessionStorage.removeItem(`rpt_${orderId}`);
           } else if (status.status === "error") {
             setPhase("error");
             setErrorMsg(status.error_message || "리포트 생성 중 오류가 발생했습니다.");

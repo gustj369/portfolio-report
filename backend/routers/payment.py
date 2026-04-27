@@ -21,6 +21,7 @@ TOSS_CONFIRM_URL = "https://api.tosspayments.com/v1/payments/confirm"
 # 스토리지 키 접두사
 _PENDING_PFX = "pay:pending:"
 _CONFIRMED_PFX = "pay:confirmed:"
+_IDEMPOTENCY_PFX = "pay:idempotency:"  # 중복 confirm 방지 (order_id → report_token)
 
 
 class PaymentRequestInput(BaseModel):
@@ -88,6 +89,15 @@ async def confirm_payment(
     # 대기 중인 결제 확인
     pending = storage_get(f"{_PENDING_PFX}{body.order_id}")
     if not pending:
+        # 이미 처리된 주문인지 확인 (네트워크 재시도·이중 요청 멱등성)
+        cached = storage_get(f"{_IDEMPOTENCY_PFX}{body.order_id}")
+        if cached:
+            logger.info(f"중복 confirm 요청 — 캐시된 토큰 반환: {body.order_id}")
+            return PaymentConfirmResponse(
+                success=True,
+                report_token=cached["report_token"],
+                message="이미 처리된 결제입니다.",
+            )
         raise HTTPException(
             status_code=404,
             detail="결제 세션이 만료되었거나 존재하지 않는 주문입니다. (결제 요청 후 1시간 이내에 완료해주세요)",
@@ -140,6 +150,12 @@ async def confirm_payment(
             "confirmed_at": datetime.now().isoformat(),
         },
         ttl=86400 * 7,  # 7일 보관
+    )
+    # 멱등성 키 저장 — 7일 동안 동일 order_id로 재요청 시 같은 토큰 반환
+    storage_set(
+        f"{_IDEMPOTENCY_PFX}{body.order_id}",
+        {"report_token": report_token},
+        ttl=86400 * 7,
     )
 
     logger.info(f"결제 승인 완료: {body.order_id} → {report_token}")
