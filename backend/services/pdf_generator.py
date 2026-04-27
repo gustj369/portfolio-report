@@ -648,16 +648,18 @@ def _build_market_page(
 
     # 시장 지표 스냅샷
     story.append(Paragraph("분석 시점 시장 스냅샷", styles["subsection_title"]))
+    # 실시간 수집 실패 시 기본값이 그대로 출력되는 것을 방지 — 기본값이면 "(참고값)" 표기
+    _ref = lambda v, d: " (참고값)" if v == d else ""
     market_data = [
         ["지표", "현재 값"],
-        ["S&P 500", f"{market_snapshot.sp500:,.0f}"],
-        ["코스피", f"{market_snapshot.kospi:,.0f}"],
-        ["미국 10년 국채 금리", f"{market_snapshot.us_10y_yield:.2f}%"],
-        ["한국 기준금리", f"{market_snapshot.kr_base_rate:.2f}%"],
-        ["달러/원 환율", f"{market_snapshot.usd_krw:,.0f}원"],
-        ["금 현물 가격", f"${market_snapshot.gold_price:,.0f}"],
-        ["미국 CPI (인플레이션)", f"{market_snapshot.cpi_us:.1f}%"],
-        ["데이터 기준일", market_snapshot.fetched_at.strftime("%Y-%m-%d %H:%M")],
+        ["S&P 500",             f"{market_snapshot.sp500:,.0f}{_ref(market_snapshot.sp500, 5000.0)}"],
+        ["코스피",               f"{market_snapshot.kospi:,.0f}{_ref(market_snapshot.kospi, 2500.0)}"],
+        ["미국 10년 국채 금리",   f"{market_snapshot.us_10y_yield:.2f}%{_ref(market_snapshot.us_10y_yield, 4.3)}"],
+        ["한국 기준금리",         f"{market_snapshot.kr_base_rate:.2f}%{_ref(market_snapshot.kr_base_rate, 3.5)}"],
+        ["달러/원 환율",          f"{market_snapshot.usd_krw:,.0f}원{_ref(market_snapshot.usd_krw, 1350.0)}"],
+        ["금 현물 가격",          f"${market_snapshot.gold_price:,.0f}{_ref(market_snapshot.gold_price, 2300.0)}"],
+        ["미국 CPI (인플레이션)", f"{market_snapshot.cpi_us:.1f}%{_ref(market_snapshot.cpi_us, 3.2)}"],
+        ["데이터 기준일",         market_snapshot.fetched_at.strftime("%Y-%m-%d %H:%M")],
     ]
     market_table = Table(market_data, colWidths=[90 * mm, 80 * mm])
     market_table.setStyle(TableStyle([
