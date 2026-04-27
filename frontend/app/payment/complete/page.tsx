@@ -36,6 +36,7 @@ function CompletePageContent() {
   const [errorMsg, setErrorMsg] = useState("");
   const [currentStep, setCurrentStep] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isSlowWarning, setIsSlowWarning] = useState(false);
 
   const handleDownload = async () => {
     if (!downloadUrl) return;
@@ -115,6 +116,7 @@ function CompletePageContent() {
             return;
           }
           attempts++;
+          if (attempts === 20) setIsSlowWarning(true); // 약 60초 경과 시 안내
 
           const status = await getReportStatus(token);
           setReportStatus(status.status);
@@ -243,7 +245,13 @@ function CompletePageContent() {
           ))}
         </div>
 
-        <p className="text-xs text-gray-400 mt-6">약 15~30초 소요됩니다</p>
+        {isSlowWarning ? (
+          <p className="text-xs text-amber-500 mt-6">
+            예상보다 시간이 걸리고 있습니다. 잠시만 기다려주세요...
+          </p>
+        ) : (
+          <p className="text-xs text-gray-400 mt-6">약 15~30초 소요됩니다</p>
+        )}
       </div>
     </div>
   );

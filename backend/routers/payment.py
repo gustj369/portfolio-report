@@ -47,7 +47,7 @@ class PaymentConfirmResponse(BaseModel):
 
 class PaymentStatusResponse(BaseModel):
     order_id: str
-    status: str  # pending / confirmed / unknown
+    status: str  # pending / unknown (confirmed 이후엔 report_token 기준으로 관리되므로 order_id로 조회 불가)
 
 
 @router.post("/request", response_model=PaymentRequestResponse)
@@ -88,7 +88,10 @@ async def confirm_payment(
     # 대기 중인 결제 확인
     pending = storage_get(f"{_PENDING_PFX}{body.order_id}")
     if not pending:
-        raise HTTPException(status_code=404, detail="존재하지 않는 주문입니다.")
+        raise HTTPException(
+            status_code=404,
+            detail="결제 세션이 만료되었거나 존재하지 않는 주문입니다. (결제 요청 후 1시간 이내에 완료해주세요)",
+        )
 
     if pending["amount"] != body.amount:
         raise HTTPException(status_code=400, detail="결제 금액이 일치하지 않습니다.")
