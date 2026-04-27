@@ -204,7 +204,11 @@ def _call_gemini(model: genai.GenerativeModel, prompt: str) -> str:
 
     for attempt in range(3):
         try:
-            response = model.generate_content(prompt, generation_config=config)
+            response = model.generate_content(
+                prompt,
+                generation_config=config,
+                request_options={"timeout": 60},  # 60초 초과 시 DeadlineExceeded → retry
+            )
             return response.text
         except Exception as e:
             error_msg = str(e)

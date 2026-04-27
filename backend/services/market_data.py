@@ -193,15 +193,19 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                         logger.warning("KOSPI stooq N/A 수신 — 건너뜀")
                     else:
                         fp = float(raw_close)
-                        stooq_date_str = vals[date_idx]
-                        # 날짜 검증: 주말 포함 최대 5일 이내 데이터만 사용
-                        stooq_date = datetime.strptime(stooq_date_str, "%Y-%m-%d").date()
-                        days_old = (datetime.now(KST).date() - stooq_date).days
-                        if days_old > 5:
-                            logger.warning(f"KOSPI stooq 데이터 오래됨 ({days_old}일, {stooq_date_str}) — 건너뜀")
-                        elif 1000 <= fp <= 5000:
-                            data["kospi"] = fp
-                            logger.info(f"KOSPI stooq fallback 성공: {fp} ({stooq_date_str})")
+                        raw_date = vals[date_idx]
+                        if raw_date in ("N/A", "-", "", "null"):
+                            logger.warning("KOSPI stooq 날짜 N/A — 건너뜀")
+                        else:
+                            stooq_date_str = raw_date
+                            # 날짜 검증: 주말 포함 최대 5일 이내 데이터만 사용
+                            stooq_date = datetime.strptime(stooq_date_str, "%Y-%m-%d").date()
+                            days_old = (datetime.now(KST).date() - stooq_date).days
+                            if days_old > 5:
+                                logger.warning(f"KOSPI stooq 데이터 오래됨 ({days_old}일, {stooq_date_str}) — 건너뜀")
+                            elif 1000 <= fp <= 5000:
+                                data["kospi"] = fp
+                                logger.info(f"KOSPI stooq fallback 성공: {fp} ({stooq_date_str})")
         except Exception as e:
             logger.warning(f"KOSPI stooq fallback 실패: {e}")
 
@@ -231,14 +235,18 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                         logger.warning("SP500 stooq N/A 수신 — 건너뜀")
                     else:
                         fp = float(raw_close)
-                        stooq_date_str = vals[date_idx]
-                        stooq_date = datetime.strptime(stooq_date_str, "%Y-%m-%d").date()
-                        days_old = (datetime.now(KST).date() - stooq_date).days
-                        if days_old > 5:
-                            logger.warning(f"SP500 stooq 데이터 오래됨 ({days_old}일, {stooq_date_str}) — 건너뜀")
-                        elif 1000 <= fp <= 10000:
-                            data["sp500"] = fp
-                            logger.info(f"SP500 stooq fallback 성공: {fp} ({stooq_date_str})")
+                        raw_date = vals[date_idx]
+                        if raw_date in ("N/A", "-", "", "null"):
+                            logger.warning("SP500 stooq 날짜 N/A — 건너뜀")
+                        else:
+                            stooq_date_str = raw_date
+                            stooq_date = datetime.strptime(stooq_date_str, "%Y-%m-%d").date()
+                            days_old = (datetime.now(KST).date() - stooq_date).days
+                            if days_old > 5:
+                                logger.warning(f"SP500 stooq 데이터 오래됨 ({days_old}일, {stooq_date_str}) — 건너뜀")
+                            elif 1000 <= fp <= 10000:
+                                data["sp500"] = fp
+                                logger.info(f"SP500 stooq fallback 성공: {fp} ({stooq_date_str})")
         except Exception as e:
             logger.warning(f"SP500 stooq fallback 실패: {e}")
 
@@ -272,17 +280,21 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                         if 0 < krw < 1:
                             krw = round(1 / krw, 2)
                             logger.info(f"USD/KRW stooq 역단위 감지 → 역수 보정: {krw}")
-                        stooq_date_str = vals[date_idx]
-                        stooq_date = datetime.strptime(stooq_date_str, "%Y-%m-%d").date()
-                        days_old = (datetime.now(KST).date() - stooq_date).days
-                        if days_old > 5:
-                            logger.warning(f"USD/KRW stooq 데이터 오래됨 ({days_old}일, {stooq_date_str}) — 건너뜀")
-                        elif 800 <= krw <= 2000:
-                            data["usd_krw"] = krw
-                            logger.info(f"USD/KRW stooq fallback 성공: {krw} ({stooq_date_str})")
+                        raw_date = vals[date_idx]
+                        if raw_date in ("N/A", "-", "", "null"):
+                            logger.warning("USD/KRW stooq 날짜 N/A — 건너뜀")
                         else:
-                            # 보정 후에도 범위 밖이면 진단 로그
-                            logger.warning(f"USD/KRW stooq 범위 밖 수신: {krw} (예상 800~2000) — 건너뜀")
+                            stooq_date_str = raw_date
+                            stooq_date = datetime.strptime(stooq_date_str, "%Y-%m-%d").date()
+                            days_old = (datetime.now(KST).date() - stooq_date).days
+                            if days_old > 5:
+                                logger.warning(f"USD/KRW stooq 데이터 오래됨 ({days_old}일, {stooq_date_str}) — 건너뜀")
+                            elif 800 <= krw <= 2000:
+                                data["usd_krw"] = krw
+                                logger.info(f"USD/KRW stooq fallback 성공: {krw} ({stooq_date_str})")
+                            else:
+                                # 보정 후에도 범위 밖이면 진단 로그
+                                logger.warning(f"USD/KRW stooq 범위 밖 수신: {krw} (예상 800~2000) — 건너뜀")
         except Exception as e:
             logger.warning(f"USD/KRW stooq fallback 실패: {e}")
 
@@ -329,14 +341,18 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                         logger.warning("금 stooq N/A 수신 — 건너뜀")
                     else:
                         fp = float(raw_close)
-                        stooq_date_str = vals[date_idx]
-                        stooq_date = datetime.strptime(stooq_date_str, "%Y-%m-%d").date()
-                        days_old = (datetime.now(KST).date() - stooq_date).days
-                        if days_old > 5:
-                            logger.warning(f"금 stooq 데이터 오래됨 ({days_old}일, {stooq_date_str}) — 건너뜀")
-                        elif 500 <= fp <= 5000:
-                            data["gold_price"] = fp
-                            logger.info(f"금 stooq fallback 성공: {fp} ({stooq_date_str})")
+                        raw_date = vals[date_idx]
+                        if raw_date in ("N/A", "-", "", "null"):
+                            logger.warning("금 stooq 날짜 N/A — 건너뜀")
+                        else:
+                            stooq_date_str = raw_date
+                            stooq_date = datetime.strptime(stooq_date_str, "%Y-%m-%d").date()
+                            days_old = (datetime.now(KST).date() - stooq_date).days
+                            if days_old > 5:
+                                logger.warning(f"금 stooq 데이터 오래됨 ({days_old}일, {stooq_date_str}) — 건너뜀")
+                            elif 500 <= fp <= 5000:
+                                data["gold_price"] = fp
+                                logger.info(f"금 stooq fallback 성공: {fp} ({stooq_date_str})")
         except Exception as e:
             logger.warning(f"금 stooq fallback 실패: {e}")
 

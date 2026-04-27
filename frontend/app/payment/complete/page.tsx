@@ -37,7 +37,7 @@ function CompletePageContent() {
   const [currentStep, setCurrentStep] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSlowWarning, setIsSlowWarning] = useState(false);
-  const [errorCode, setErrorCode] = useState<"timeout" | "server" | "network" | "payment" | "">("");
+  const [errorCode, setErrorCode] = useState<"timeout" | "server" | "network" | "payment" | "expired" | "">("");
 
   const handleDownload = async () => {
     if (!downloadUrl) return;
@@ -143,7 +143,20 @@ function CompletePageContent() {
           attempts++;
           if (attempts === 20) setIsSlowWarning(true); // 약 60초 경과 시 안내
 
-          const status = await getReportStatus(token);
+          let status;
+          try {
+            status = await getReportStatus(token);
+          } catch (e) {
+            // 404: 리포트 레코드 없음 → 토큰 만료(7일) 또는 잘못된 토큰
+            if (e instanceof Error && (e as any).httpStatus === 404) {
+              sessionStorage.removeItem(`rpt_${orderId}`);
+              setErrorCode("expired");
+              setPhase("error");
+              setErrorMsg("리포트가 만료되었습니다. (리포트는 7일간 보관됩니다)");
+              return;
+            }
+            throw e; // 그 외 네트워크 오류는 외부 catch로 전달
+          }
           setReportStatus(status.status);
 
           if (status.status === "generating") setCurrentStep(Math.min(2 + Math.floor(attempts / 5), 4));
@@ -246,7 +259,12 @@ function CompletePageContent() {
               결제 세션이 만료된 경우 처음부터 다시 진행해주세요.
             </p>
           )}
-          {errorCode === "payment" ? (
+          {errorCode === "expired" && (
+            <p className="text-xs text-gray-400 mb-4">
+              리포트는 결제 후 7일간 보관됩니다. 기간이 지난 경우 새로 신청해주세요.
+            </p>
+          )}
+          {errorCode === "payment" || errorCode === "expired" ? (
             <Link
               href="/input/step1"
               className="btn-gold block w-full py-3 text-center rounded-xl mb-3"
