@@ -187,6 +187,8 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                     vals = [v.strip() for v in lines[1].split(",")]
                     close_idx = cols.index("Close") if "Close" in cols else 4
                     date_idx = cols.index("Date") if "Date" in cols else 1
+                    if "Close" not in cols or "Date" not in cols:
+                        logger.warning(f"KOSPI stooq 예상치 못한 헤더 (fallback 인덱스 사용): {cols[:8]}")
                     # 열 수 부족 방어: 빈 행 or 컬럼 누락 시 IndexError 방지
                     if len(vals) <= max(close_idx, date_idx):
                         logger.warning("KOSPI stooq 열 수 부족 — 건너뜀")
@@ -231,6 +233,8 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                     vals = [v.strip() for v in lines[1].split(",")]
                     close_idx = cols.index("Close") if "Close" in cols else 4
                     date_idx = cols.index("Date") if "Date" in cols else 1
+                    if "Close" not in cols or "Date" not in cols:
+                        logger.warning(f"SP500 stooq 예상치 못한 헤더 (fallback 인덱스 사용): {cols[:8]}")
                     if len(vals) <= max(close_idx, date_idx):
                         logger.warning("SP500 stooq 열 수 부족 — 건너뜀")
                     elif vals[close_idx] in ("N/A", "-", "", "null"):
@@ -273,6 +277,8 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                     vals = [v.strip() for v in lines[1].split(",")]
                     close_idx = cols.index("Close") if "Close" in cols else 4
                     date_idx = cols.index("Date") if "Date" in cols else 1
+                    if "Close" not in cols or "Date" not in cols:
+                        logger.warning(f"USD/KRW stooq 예상치 못한 헤더 (fallback 인덱스 사용): {cols[:8]}")
                     if len(vals) <= max(close_idx, date_idx):
                         logger.warning("USD/KRW stooq 열 수 부족 — 건너뜀")
                     elif vals[close_idx] in ("N/A", "-", "", "null"):
@@ -339,6 +345,8 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                     vals = [v.strip() for v in lines[1].split(",")]
                     close_idx = cols.index("Close") if "Close" in cols else 4
                     date_idx = cols.index("Date") if "Date" in cols else 1
+                    if "Close" not in cols or "Date" not in cols:
+                        logger.warning(f"금 stooq 예상치 못한 헤더 (fallback 인덱스 사용): {cols[:8]}")
                     if len(vals) <= max(close_idx, date_idx):
                         logger.warning("금 stooq 열 수 부족 — 건너뜀")
                     elif vals[close_idx] in ("N/A", "-", "", "null"):

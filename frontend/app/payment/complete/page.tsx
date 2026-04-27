@@ -124,7 +124,11 @@ function CompletePageContent() {
         // 2. 리포트 생성 시작
         setCurrentStep(1);
         setPhase("generating");
-        await generateReport(token);
+        // 네트워크 오류 시 2초 대기 후 1회 재시도 (토큰은 유효, 백엔드 idempotent)
+        await generateReport(token).catch(async () => {
+          await new Promise(r => setTimeout(r, 2000));
+          await generateReport(token); // 재시도 실패 시 외부 catch → errorCode("network")
+        });
 
         // 3. 상태 폴링
         let attempts = 0;
