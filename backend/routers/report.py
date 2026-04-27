@@ -222,16 +222,22 @@ async def _generate_report_background(
                 risk_grade,
             )
 
-        # 4. 차트 생성
+        # 4. 차트 생성 — 개별 실패 시 None 반환 (PDF는 해당 차트 없이 계속 생성)
         logger.info(f"[{report_token}] 차트 생성")
+        def _safe_chart(fn, *args):
+            try:
+                return fn(*args)
+            except Exception as e:
+                logger.warning(f"차트 생성 실패 ({fn.__name__}): {e}")
+                return None
+
         charts = {
-            "pie": generate_portfolio_pie_chart(analyze_req.portfolio),
-            "line": generate_projection_line_chart(simulation),
-            "stacked_bar": generate_stacked_bar_chart(analyze_req.portfolio, simulation),
-            "rebalancing": generate_rebalancing_comparison_chart(
-                analyze_req.portfolio,
-                ai_content.rebalancing_recommendations,
-            ),
+            "pie":          _safe_chart(generate_portfolio_pie_chart, analyze_req.portfolio),
+            "line":         _safe_chart(generate_projection_line_chart, simulation),
+            "stacked_bar":  _safe_chart(generate_stacked_bar_chart, analyze_req.portfolio, simulation),
+            "rebalancing":  _safe_chart(generate_rebalancing_comparison_chart,
+                                        analyze_req.portfolio,
+                                        ai_content.rebalancing_recommendations),
         }
 
         # 5. PDF 생성
