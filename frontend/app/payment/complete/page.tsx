@@ -249,7 +249,7 @@ function CompletePageContent() {
           {errorCode === "payment" ? (
             <Link
               href="/input/step1"
-              className="btn-gold mb-3 w-full block text-center"
+              className="btn-gold block w-full py-3 text-center rounded-xl mb-3"
             >
               처음부터 시작하기
             </Link>

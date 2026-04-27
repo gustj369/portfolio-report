@@ -255,6 +255,10 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                     close_idx = cols.index("Close") if "Close" in cols else 4
                     date_idx = cols.index("Date") if "Date" in cols else 1
                     krw = float(vals[close_idx])
+                    # 역단위 자동 보정: stooq이 KRW/USD(≈0.00072) 대신 USD/KRW(≈1380) 반환 보장
+                    if 0 < krw < 1:
+                        krw = round(1 / krw, 2)
+                        logger.info(f"USD/KRW stooq 역단위 감지 → 역수 보정: {krw}")
                     stooq_date_str = vals[date_idx]
                     stooq_date = datetime.strptime(stooq_date_str, "%Y-%m-%d").date()
                     days_old = (datetime.now(KST).date() - stooq_date).days
@@ -264,7 +268,7 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                         data["usd_krw"] = krw
                         logger.info(f"USD/KRW stooq fallback 성공: {krw} ({stooq_date_str})")
                     else:
-                        # 티커(usdkrw)가 예상 범위 밖 값 반환 시 진단용 — Render 로그 확인 후 티커 교정
+                        # 보정 후에도 범위 밖이면 진단 로그
                         logger.warning(f"USD/KRW stooq 범위 밖 수신: {krw} (예상 800~2000) — 건너뜀")
         except Exception as e:
             logger.warning(f"USD/KRW stooq fallback 실패: {e}")
@@ -324,13 +328,15 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
     else:
         logger.info(f"금값 최종값: {data['gold_price']:.2f}")
 
-    # 시장 데이터 수집 요약 (Render 로그에서 한 줄로 전체 확인)
+    # 시장 데이터 수집 요약 — (기본) 표시는 fallback 전체 실패해 기본값 사용 중임을 의미
+    def _mark(val: float, default: float) -> str:
+        return "(기본)" if val == default else ""
     logger.info(
         f"시장 데이터 수집 완료 — "
-        f"KOSPI:{data['kospi']:.0f} "
-        f"SP500:{data['sp500']:.0f} "
-        f"USD/KRW:{data['usd_krw']:.0f} "
-        f"금:{data['gold_price']:.0f}"
+        f"KOSPI:{data['kospi']:.0f}{_mark(data['kospi'], 2500.0)} "
+        f"SP500:{data['sp500']:.0f}{_mark(data['sp500'], 5000.0)} "
+        f"USD/KRW:{data['usd_krw']:.0f}{_mark(data['usd_krw'], 1350.0)} "
+        f"금:{data['gold_price']:.0f}{_mark(data['gold_price'], 2300.0)}"
     )
 
     # FRED API에서 금리/CPI 수집
