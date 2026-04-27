@@ -41,3 +41,14 @@ services:
         value: "0"           # 무료
       - key: TZ
         value: Asia/Seoul    # 서버 시간대 KST 고정 (로그·타임스탬프 혼선 방지)
+
+# ── 로그 모니터링 ─────────────────────────────────────────────────────────────
+# Log Drain 설정은 render.yaml 미지원 — Render 대시보드에서 직접 구성:
+#   대시보드 → 서비스 선택 → Logs → Log Drains → Add Log Drain
+#   지원 대상: Betterstack (https://betterstack.com), Papertrail, Datadog 등
+#
+# 주요 모니터링 키워드 (로그 알림 설정 시 활용):
+#   WARNING  "전체 fallback 실패"   → 시장 데이터 기본값 사용 중
+#   WARNING  "PENDING 중복 요청"    → generateReport 중복 호출
+#   ERROR    "리포트 생성 실패"      → PDF 생성 에러
+#   INFO     "KOSPI 최종값"         → KOSPI fallback 성공 소스 확인

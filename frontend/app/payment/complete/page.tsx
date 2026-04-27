@@ -37,7 +37,7 @@ function CompletePageContent() {
   const [currentStep, setCurrentStep] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSlowWarning, setIsSlowWarning] = useState(false);
-  const [errorCode, setErrorCode] = useState<"timeout" | "server" | "network" | "">("");
+  const [errorCode, setErrorCode] = useState<"timeout" | "server" | "network" | "payment" | "">("");
 
   const handleDownload = async () => {
     if (!downloadUrl) return;
@@ -102,15 +102,23 @@ function CompletePageContent() {
             return;
           }
           setCurrentStep(0);
-          const confirmResult = await confirmPayment({
-            payment_key: paymentKey,
-            order_id: orderId,
-            amount: Number(amount),
-          });
-          token = confirmResult.report_token;
-          setLocalReportToken(token);
-          setReportToken(token);
-          sessionStorage.setItem(`rpt_${orderId}`, token);
+          try {
+            const confirmResult = await confirmPayment({
+              payment_key: paymentKey,
+              order_id: orderId,
+              amount: Number(amount),
+            });
+            token = confirmResult.report_token;
+            setLocalReportToken(token);
+            setReportToken(token);
+            sessionStorage.setItem(`rpt_${orderId}`, token);
+          } catch (e) {
+            // 결제 확인 실패는 네트워크 오류와 구분 (만료·금액 불일치 등)
+            setErrorCode("payment");
+            setPhase("error");
+            setErrorMsg(e instanceof Error ? e.message : "결제 확인 중 오류가 발생했습니다.");
+            return;
+          }
         }
 
         // 2. 리포트 생성 시작
@@ -231,6 +239,11 @@ function CompletePageContent() {
           {errorCode === "network" && (
             <p className="text-xs text-gray-400 mb-4">
               인터넷 연결을 확인하고 다시 시도해주세요.
+            </p>
+          )}
+          {errorCode === "payment" && (
+            <p className="text-xs text-gray-400 mb-4">
+              결제 세션이 만료된 경우 처음부터 다시 진행해주세요.
             </p>
           )}
           <button

@@ -206,7 +206,7 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
     else:
         logger.info(f"KOSPI 최종값: {data['kospi']:.2f}")
 
-    # ── SP500 fallback ────────────────────────────────────────
+    # ── SP500 fallback + 최종 로그 ────────────────────────────
     if data["sp500"] == 5000.0:
         try:
             resp = requests.get(
@@ -232,6 +232,11 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                         logger.info(f"SP500 stooq fallback 성공: {fp} ({stooq_date_str})")
         except Exception as e:
             logger.warning(f"SP500 stooq fallback 실패: {e}")
+
+    if data["sp500"] == 5000.0:
+        logger.warning("SP500 전체 fallback 실패 — 기본값 5000 사용 중")
+    else:
+        logger.info(f"SP500 최종값: {data['sp500']:.2f}")
 
     # ── USD/KRW fallback ──────────────────────────────────────
     if data["usd_krw"] == 1350.0:
@@ -310,6 +315,11 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                         logger.info(f"금 stooq fallback 성공: {fp} ({stooq_date_str})")
         except Exception as e:
             logger.warning(f"금 stooq fallback 실패: {e}")
+
+    if data["gold_price"] == 2300.0:
+        logger.warning("금값 전체 fallback 실패 — 기본값 2300 사용 중")
+    else:
+        logger.info(f"금값 최종값: {data['gold_price']:.2f}")
 
     # FRED API에서 금리/CPI 수집
     if fred_api_key:
