@@ -235,23 +235,7 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
 
     # ── USD/KRW fallback ──────────────────────────────────────
     if data["usd_krw"] == 1350.0:
-        # fallback 1: open.er-api.com — 무료, 인증 불필요, Yahoo Finance와 완전 독립
-        try:
-            resp = requests.get(
-                "https://open.er-api.com/v6/latest/USD",
-                headers={"User-Agent": "Mozilla/5.0"},
-                timeout=10,
-            )
-            if resp.ok:
-                krw = float(resp.json().get("rates", {}).get("KRW", 0))
-                if 800 <= krw <= 2000:
-                    data["usd_krw"] = krw
-                    logger.info(f"USD/KRW open.er-api fallback 성공: {krw}")
-        except Exception as e:
-            logger.warning(f"USD/KRW open.er-api fallback 실패: {e}")
-
-    if data["usd_krw"] == 1350.0:
-        # fallback 2: stooq.com CSV (open.er-api와 완전히 독립적인 유럽 데이터 소스)
+        # fallback 1: stooq.com CSV — 장 마감 기준 최신 데이터 (open.er-api 24h 캐시보다 신선)
         try:
             resp = requests.get(
                 "https://stooq.com/q/l/?s=usdkrw&f=sd2t2ohlcv&h&e=csv",
@@ -276,6 +260,28 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                         logger.info(f"USD/KRW stooq fallback 성공: {krw} ({stooq_date_str})")
         except Exception as e:
             logger.warning(f"USD/KRW stooq fallback 실패: {e}")
+
+    if data["usd_krw"] == 1350.0:
+        # fallback 2: open.er-api.com — 무료, 인증 불필요 (무료 플랜 24h 캐시)
+        try:
+            resp = requests.get(
+                "https://open.er-api.com/v6/latest/USD",
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=10,
+            )
+            if resp.ok:
+                krw = float(resp.json().get("rates", {}).get("KRW", 0))
+                if 800 <= krw <= 2000:
+                    data["usd_krw"] = krw
+                    logger.info(f"USD/KRW open.er-api fallback 성공: {krw}")
+        except Exception as e:
+            logger.warning(f"USD/KRW open.er-api fallback 실패: {e}")
+
+    # USD/KRW 최종 상태 로그 (Render 로그에서 확인용)
+    if data["usd_krw"] == 1350.0:
+        logger.warning("USD/KRW 전체 fallback 실패 — 기본값 1350 사용 중")
+    else:
+        logger.info(f"USD/KRW 최종값: {data['usd_krw']:.2f}")
 
     # ── 금값 fallback ─────────────────────────────────────────
     if data["gold_price"] == 2300.0:
