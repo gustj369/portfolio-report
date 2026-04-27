@@ -97,7 +97,27 @@ async def generate_report(
     if existing and existing.status == ReportStatus.ERROR:
         logger.info(f"[{body.report_token}] 이전 실패({existing.error_message}) → 재생성 시작")
 
-    # 새 리포트 레코드 생성 (기존 ERROR/PENDING 레코드 덮어쓰기)
+    # PENDING 중복 생성 방지: 5분 이내 PENDING 재요청은 건너뜀
+    if existing and existing.status == ReportStatus.PENDING:
+        try:
+            now = datetime.now(KST)
+            created = existing.created_at
+            if created.tzinfo is None:          # naive datetime 안전 처리
+                created = created.replace(tzinfo=KST)
+            if (now - created).total_seconds() < 300:
+                logger.warning(
+                    f"[{body.report_token}] PENDING 중복 요청 "
+                    f"({int((now - created).total_seconds())}초 경과) — 건너뜀"
+                )
+                return GenerateReportResponse(
+                    report_token=body.report_token,
+                    status=ReportStatus.PENDING.value,
+                    message="이미 처리 중이거나 완료된 요청입니다.",
+                )
+        except Exception:
+            pass  # 비교 실패 시 재생성 허용
+
+    # 새 리포트 레코드 생성 (기존 ERROR 또는 5분 초과 PENDING 덮어쓰기)
     record = ReportRecord(
         order_id=payment["order_id"],
         report_token=body.report_token,

@@ -37,6 +37,7 @@ function CompletePageContent() {
   const [currentStep, setCurrentStep] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSlowWarning, setIsSlowWarning] = useState(false);
+  const [errorCode, setErrorCode] = useState<"timeout" | "server" | "network" | "">("");
 
   const handleDownload = async () => {
     if (!downloadUrl) return;
@@ -126,6 +127,7 @@ function CompletePageContent() {
         const poll = async () => {
           if (attempts >= maxAttempts) {
             sessionStorage.removeItem(`rpt_${orderId}`);
+            setErrorCode("timeout");
             setPhase("error");
             setErrorMsg("리포트 생성 시간이 초과되었습니다. 고객센터에 문의해주세요.");
             return;
@@ -149,6 +151,7 @@ function CompletePageContent() {
             sessionStorage.removeItem(`rpt_${orderId}`);
           } else if (status.status === "error") {
             sessionStorage.removeItem(`rpt_${orderId}`);
+            setErrorCode("server");
             setPhase("error");
             setErrorMsg(status.error_message || "리포트 생성 중 오류가 발생했습니다.");
           } else {
@@ -159,6 +162,7 @@ function CompletePageContent() {
         setTimeout(poll, 2000);
       } catch (e) {
         sessionStorage.removeItem(`rpt_${orderId}`);
+        setErrorCode("network");
         setPhase("error");
         setErrorMsg(e instanceof Error ? e.message : "처리 중 오류가 발생했습니다.");
       }
@@ -214,7 +218,7 @@ function CompletePageContent() {
           <div className="text-5xl mb-4">❌</div>
           <h1 className="text-xl font-bold text-navy mb-2">오류가 발생했습니다</h1>
           <p className="text-gray-500 text-sm mb-4">{errorMsg}</p>
-          {errorMsg.includes("시간이 초과") && (
+          {errorCode === "timeout" && (
             <p className="text-xs text-gray-400 mb-4">
               재시도 후에도 같은 문제가 반복되면 고객센터에 문의해주세요.
             </p>

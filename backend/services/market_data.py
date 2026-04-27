@@ -220,10 +220,16 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                     cols = [c.strip() for c in lines[0].split(",")]
                     vals = [v.strip() for v in lines[1].split(",")]
                     close_idx = cols.index("Close") if "Close" in cols else 4
+                    date_idx = cols.index("Date") if "Date" in cols else 1
                     fp = float(vals[close_idx])
-                    if 1000 <= fp <= 10000:
+                    stooq_date_str = vals[date_idx]
+                    stooq_date = datetime.strptime(stooq_date_str, "%Y-%m-%d").date()
+                    days_old = (datetime.now(KST).date() - stooq_date).days
+                    if days_old > 5:
+                        logger.warning(f"SP500 stooq 데이터 오래됨 ({days_old}일, {stooq_date_str}) — 건너뜀")
+                    elif 1000 <= fp <= 10000:
                         data["sp500"] = fp
-                        logger.info(f"SP500 stooq fallback 성공: {fp}")
+                        logger.info(f"SP500 stooq fallback 성공: {fp} ({stooq_date_str})")
         except Exception as e:
             logger.warning(f"SP500 stooq fallback 실패: {e}")
 
@@ -259,10 +265,16 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                     cols = [c.strip() for c in lines[0].split(",")]
                     vals = [v.strip() for v in lines[1].split(",")]
                     close_idx = cols.index("Close") if "Close" in cols else 4
+                    date_idx = cols.index("Date") if "Date" in cols else 1
                     fp = float(vals[close_idx])
-                    if 500 <= fp <= 5000:
+                    stooq_date_str = vals[date_idx]
+                    stooq_date = datetime.strptime(stooq_date_str, "%Y-%m-%d").date()
+                    days_old = (datetime.now(KST).date() - stooq_date).days
+                    if days_old > 5:
+                        logger.warning(f"금 stooq 데이터 오래됨 ({days_old}일, {stooq_date_str}) — 건너뜀")
+                    elif 500 <= fp <= 5000:
                         data["gold_price"] = fp
-                        logger.info(f"금 stooq fallback 성공: {fp}")
+                        logger.info(f"금 stooq fallback 성공: {fp} ({stooq_date_str})")
         except Exception as e:
             logger.warning(f"금 stooq fallback 실패: {e}")
 
