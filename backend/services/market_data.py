@@ -263,6 +263,9 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                     elif 800 <= krw <= 2000:
                         data["usd_krw"] = krw
                         logger.info(f"USD/KRW stooq fallback 성공: {krw} ({stooq_date_str})")
+                    else:
+                        # 티커(usdkrw)가 예상 범위 밖 값 반환 시 진단용 — Render 로그 확인 후 티커 교정
+                        logger.warning(f"USD/KRW stooq 범위 밖 수신: {krw} (예상 800~2000) — 건너뜀")
         except Exception as e:
             logger.warning(f"USD/KRW stooq fallback 실패: {e}")
 
@@ -320,6 +323,15 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
         logger.warning("금값 전체 fallback 실패 — 기본값 2300 사용 중")
     else:
         logger.info(f"금값 최종값: {data['gold_price']:.2f}")
+
+    # 시장 데이터 수집 요약 (Render 로그에서 한 줄로 전체 확인)
+    logger.info(
+        f"시장 데이터 수집 완료 — "
+        f"KOSPI:{data['kospi']:.0f} "
+        f"SP500:{data['sp500']:.0f} "
+        f"USD/KRW:{data['usd_krw']:.0f} "
+        f"금:{data['gold_price']:.0f}"
+    )
 
     # FRED API에서 금리/CPI 수집
     if fred_api_key:

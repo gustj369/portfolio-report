@@ -246,12 +246,21 @@ function CompletePageContent() {
               결제 세션이 만료된 경우 처음부터 다시 진행해주세요.
             </p>
           )}
-          <button
-            onClick={() => window.location.reload()}
-            className="btn-gold mb-3 w-full"
-          >
-            다시 시도
-          </button>
+          {errorCode === "payment" ? (
+            <Link
+              href="/input/step1"
+              className="btn-gold mb-3 w-full block text-center"
+            >
+              처음부터 시작하기
+            </Link>
+          ) : (
+            <button
+              onClick={() => window.location.reload()}
+              className="btn-gold mb-3 w-full"
+            >
+              다시 시도
+            </button>
+          )}
           <Link href="/" className="block text-sm text-gray-400 hover:underline">
             홈으로 돌아가기
           </Link>
