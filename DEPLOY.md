@@ -42,7 +42,7 @@
 3. 설정:
    - **Root Directory**: `backend`
    - **Runtime**: Python 3
-   - **Build Command**: `pip install -r requirements.txt`
+   - **Build Command**: `apt-get update -y && apt-get install -y fonts-nanum || true && pip install --no-cache-dir -r requirements.txt`
    - **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
    - **Instance Type**: Free
 4. **Environment Variables** 탭에서 다음 입력:
@@ -50,6 +50,7 @@
    | 키 | 값 |
    |---|---|
    | `GEMINI_API_KEY` | (선택) Gemini API 키 |
+   | `FRED_API_KEY` | (선택) FRED API 키 |
    | `REDIS_URL` | Upstash에서 복사한 URL |
    | `R2_ACCOUNT_ID` | Cloudflare Account ID |
    | `R2_ACCESS_KEY` | R2 Access Key |
@@ -58,10 +59,17 @@
    | `USE_LOCAL_STORAGE` | `false` |
    | `FRONTEND_URL` | (일단 비워두고 Vercel 배포 후 채움) |
    | `REPORT_PRICE_KRW` | `0` |
+   | `TOSS_CLIENT_KEY` | (선택) 토스페이먼츠 클라이언트 키 |
+   | `TOSS_SECRET_KEY` | (선택) 토스페이먼츠 시크릿 키 |
+   | `AWS_ACCESS_KEY_ID` | (선택) S3 사용 시 |
+   | `AWS_SECRET_ACCESS_KEY` | (선택) S3 사용 시 |
+   | `AWS_REGION` | (선택) 기본 `ap-northeast-2` |
+   | `S3_BUCKET` | (선택) S3 버킷명 |
    | `SMTP_HOST` | `smtp.gmail.com` (이메일 사용 시) |
    | `SMTP_PORT` | `587` |
    | `SMTP_USER` | Gmail 주소 |
    | `SMTP_PASSWORD` | Gmail 앱 비밀번호 |
+   | `SMTP_FROM` | (선택) 발신자 주소 |
 
 5. **Create Web Service** → 배포 완료 후 URL 복사
    - 예: `https://portfolio-report-api.onrender.com`
@@ -83,6 +91,7 @@
    | 키 | 값 |
    |---|---|
    | `NEXT_PUBLIC_API_URL` | Render 백엔드 URL (예: `https://portfolio-report-api.onrender.com`) |
+   | `NEXT_PUBLIC_TOSS_CLIENT_KEY` | (선택) 토스페이먼츠 클라이언트 키 |
 
 5. **Deploy** → 완료 후 Vercel URL 복사
    - 예: `https://portfolio-report.vercel.app`
@@ -101,6 +110,13 @@ Render 대시보드로 돌아가서:
 1. Vercel URL 접속 → 포트폴리오 입력 → 리포트 생성
 2. Render 로그에서 진행 상황 확인:
    - `Render 대시보드 → Web Service → Logs`
+
+## 저장소와 다운로드 흐름
+
+- 배포 환경은 `REDIS_URL`을 설정해 결제/리포트 상태를 Redis에 저장하는 구성을 권장합니다.
+- `R2_ACCOUNT_ID`, `R2_ACCESS_KEY`, `R2_SECRET_KEY`가 있으면 PDF는 Cloudflare R2에 저장되고, 다운로드는 백엔드의 `/report/download/{report_token}` 경로를 통해 스트리밍됩니다.
+- R2가 없고 `USE_LOCAL_STORAGE=false`와 AWS S3 키가 있으면 S3에 저장하고 presigned URL을 반환합니다.
+- R2/S3 설정이 없으면 로컬 파일시스템(`backend/generated_reports/`)에 저장합니다. 이 방식은 개발용이며, Render 인스턴스 재시작 시 파일 보존을 기대하면 안 됩니다.
 
 ---
 

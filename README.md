@@ -1,6 +1,6 @@
 # 포트폴리오 AI 분석 리포트
 
-> AI 기반 맞춤형 자산 배분 진단 + 5년 시뮬레이션 PDF 리포트 생성 서비스
+> AI 기반 맞춤형 자산 배분 진단 + 5년 시뮬레이션 + PDF 리포트 생성 서비스
 
 ## 빠른 시작
 
@@ -56,15 +56,27 @@ python test_pipeline.py
 
 | 변수 | 설명 | 필수 |
 |------|------|------|
-| `GEMINI_API_KEY` | Google Gemini API 키 ([무료 발급](https://aistudio.google.com/app/apikey)) | 권장 (없으면 더미 텍스트 사용) |
+| `GEMINI_API_KEY` | Google Gemini API 키 ([무료 발급](https://aistudio.google.com/app/apikey)) | 권장 (없으면 fallback 분석기 사용) |
 | `FRED_API_KEY` | FRED API 키 (금리/CPI 데이터) | 선택 |
 | `TOSS_CLIENT_KEY` | 토스페이먼츠 클라이언트 키 | 결제 필요 시 |
 | `TOSS_SECRET_KEY` | 토스페이먼츠 시크릿 키 | 결제 필요 시 |
+| `REDIS_URL` | Redis URL (결제/리포트 상태 저장) | 배포 권장 |
+| `R2_ACCOUNT_ID` | Cloudflare R2 Account ID | R2 사용 시 |
+| `R2_ACCESS_KEY` | Cloudflare R2 Access Key | R2 사용 시 |
+| `R2_SECRET_KEY` | Cloudflare R2 Secret Key | R2 사용 시 |
+| `R2_BUCKET` | Cloudflare R2 버킷명 | 기본 `portfolio-reports` |
 | `AWS_ACCESS_KEY_ID` | AWS 액세스 키 | S3 사용 시 |
 | `AWS_SECRET_ACCESS_KEY` | AWS 시크릿 키 | S3 사용 시 |
+| `AWS_REGION` | AWS 리전 | 기본 `ap-northeast-2` |
 | `S3_BUCKET` | S3 버킷명 | S3 사용 시 |
 | `USE_LOCAL_STORAGE` | `true` = 로컬 저장 (개발) | 기본 true |
+| `FRONTEND_URL` | 프론트엔드 URL (CORS 허용) | 배포 시 필수 |
 | `REPORT_PRICE_KRW` | 리포트 가격 (원) | 기본 4900 |
+| `SMTP_HOST` | SMTP 서버 호스트 | 이메일 발송 시 |
+| `SMTP_PORT` | SMTP 포트 | 기본 587 |
+| `SMTP_USER` | SMTP 사용자 | 이메일 발송 시 |
+| `SMTP_PASSWORD` | SMTP 비밀번호 | 이메일 발송 시 |
+| `SMTP_FROM` | 발신자 주소 | 선택 |
 
 ### 프론트엔드 (`frontend/.env.local`)
 
@@ -77,10 +89,12 @@ python test_pipeline.py
 
 ## 개발 모드 특이사항
 
-- **API 키 없이도 동작**: Anthropic API 키 없으면 더미 분석 텍스트 사용
-- **결제 없이 테스트**: 토스 키 없으면 개발 모드로 결제 단계 통과
-- **로컬 파일 저장**: S3 키 없으면 `backend/generated_reports/` 에 PDF 저장
-- **PDF 한글**: `backend/assets/fonts/` 에 NotoSansKR 폰트 없으면 영문 폰트로 대체
+- **AI 키 없이도 동작**: Gemini API 키가 없으면 fallback 분석기를 사용합니다.
+- **결제 없이 테스트**: 토스 시크릿 키가 없으면 개발 모드로 결제 승인 단계가 통과됩니다.
+- **상태 저장 fallback**: `REDIS_URL`이 없으면 결제/리포트 상태를 인메모리에 저장하므로 서버 재시작 시 초기화됩니다.
+- **로컬 파일 저장**: R2/S3 설정이 없거나 `USE_LOCAL_STORAGE=true`이면 `backend/generated_reports/`에 PDF를 저장합니다.
+- **PDF 한글**: `backend/assets/fonts/`에 NotoSansKR 폰트가 없으면 영문 폰트로 대체될 수 있습니다.
+- **다운로드 경로**: 리포트 상태 응답의 `download_url`은 저장 방식에 따라 `/report/download/{token}` 또는 `/report/file/{filename}` 형태가 될 수 있습니다.
 
 ---
 
@@ -88,14 +102,15 @@ python test_pipeline.py
 
 | 항목 | 기술 |
 |------|------|
-| 프론트엔드 | Next.js 15, React 18, TypeScript, Tailwind CSS |
+| 프론트엔드 | Next.js 16, React 18, TypeScript, Tailwind CSS |
 | 백엔드 | FastAPI, Python 3.11+ |
 | AI | Google Gemini API (gemini-1.5-flash, 무료 티어) |
 | 시장 데이터 | yfinance, FRED API |
 | PDF 생성 | ReportLab |
 | 차트 | matplotlib |
 | 결제 | 토스페이먼츠 |
-| 파일 저장 | AWS S3 (로컬 개발: 파일시스템) |
+| 상태 저장 | Redis (미설정 시 인메모리 fallback) |
+| 파일 저장 | Cloudflare R2 또는 AWS S3 (로컬 개발: 파일시스템) |
 
 ---
 
@@ -110,11 +125,11 @@ npx vercel --prod
 
 환경 변수: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_TOSS_CLIENT_KEY`
 
-### Railway (백엔드)
+### Render (백엔드)
 
 ```bash
-# railway.toml 또는 Dockerfile 사용
-railway up
+# render.yaml 사용
+# Render 대시보드에서 Web Service 생성 후 rootDir=backend로 배포
 ```
 
 환경 변수: 위 표의 백엔드 변수 모두 설정
@@ -136,11 +151,14 @@ portfolio-report/
 │   │   ├── payment.py            # 결제 처리
 │   │   └── report.py             # PDF 생성 + 다운로드
 │   ├── services/
-│   │   ├── market_data.py        # 시장 데이터 수집
+│   │   ├── market_data.py        # 시장 데이터 수집 (yfinance, FRED)
 │   │   ├── simulator.py          # 5년 시뮬레이션
-│   │   ├── ai_engine.py          # Claude API 연동
+│   │   ├── ai_engine.py          # Gemini API 연동
+│   │   ├── fallback_analyzer.py  # Gemini 없을 때 rule-based 분석 엔진
 │   │   ├── chart_generator.py    # matplotlib 차트
-│   │   └── pdf_generator.py      # ReportLab PDF
+│   │   ├── pdf_generator.py      # ReportLab PDF 생성
+│   │   ├── storage.py            # Redis / 인메모리 상태 저장 (report_token)
+│   │   └── email_service.py      # 이메일 발송 (SMTP)
 │   ├── assets/fonts/             # NotoSansKR 폰트 파일
 │   ├── generated_reports/        # 로컬 PDF 저장 (개발)
 │   ├── requirements.txt
