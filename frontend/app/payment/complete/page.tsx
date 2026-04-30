@@ -37,6 +37,7 @@ function CompletePageContent() {
   const [currentStep, setCurrentStep] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSlowWarning, setIsSlowWarning] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
   const [errorCode, setErrorCode] = useState<"timeout" | "server" | "network" | "payment" | "expired" | "">("");
 
   const handleDownload = async () => {
@@ -126,7 +127,9 @@ function CompletePageContent() {
         setPhase("generating");
         // 네트워크 오류 시 2초 대기 후 1회 재시도 (토큰은 유효, 백엔드 idempotent)
         await generateReport(token).catch(async () => {
+          setIsRetrying(true);
           await new Promise(r => setTimeout(r, 2000));
+          setIsRetrying(false);
           await generateReport(token); // 재시도 실패 시 외부 catch → errorCode("network")
         });
 
@@ -297,7 +300,7 @@ function CompletePageContent() {
           <div className="w-16 h-16 border-4 border-gold-400 border-t-transparent rounded-full animate-spin" />
         </div>
         <h1 className="text-xl font-bold text-navy mb-2">
-          {phase === "confirming" ? "결제 확인 중..." : "리포트 생성 중..."}
+          {isRetrying ? "연결 재시도 중..." : phase === "confirming" ? "결제 확인 중..." : "리포트 생성 중..."}
         </h1>
         <p className="text-gray-500 text-sm mb-6">
           {STATUS_MESSAGES[reportStatus] || "처리 중입니다..."}

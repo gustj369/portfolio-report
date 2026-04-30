@@ -1,12 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import StepProgress from "@/components/StepProgress";
 import { useInput } from "@/context/InputContext";
 import type { InvestmentGoal, RiskTolerance } from "@/types/portfolio";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 const GOALS: { value: InvestmentGoal; label: string; emoji: string }[] = [
   { value: "노후준비", label: "노후 준비", emoji: "🏖️" },
@@ -25,11 +22,6 @@ export default function Step1Page() {
   const router = useRouter();
   const { state, setUserProfile } = useInput();
   const { userProfile } = state;
-
-  // Render cold start 대응: 폼 작성 중(~60초) 백엔드가 wake-up 완료되도록 fire-and-forget ping
-  useEffect(() => {
-    fetch(`${API_URL}/health`).catch(() => {});
-  }, []);
 
   const handleNext = () => {
     if (!userProfile.age || !userProfile.monthly_income) {

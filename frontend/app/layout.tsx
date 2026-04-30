@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Noto_Sans_KR } from "next/font/google";
 import "./globals.css";
 import { InputProvider } from "@/context/InputContext";
+import BackendPing from "@/components/BackendPing";
 
 const notoSansKR = Noto_Sans_KR({
   weight: ["400", "500", "700"],
@@ -25,7 +26,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko" className={notoSansKR.variable}>
       <body className="font-sans bg-gray-50 text-gray-900 antialiased">
-        <InputProvider>{children}</InputProvider>
+        <InputProvider>
+          <BackendPing />
+          {children}
+        </InputProvider>
       </body>
     </html>
   );
