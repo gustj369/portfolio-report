@@ -10,6 +10,9 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
  */
 export default function BackendPing() {
   useEffect(() => {
+    // 같은 브라우저 세션 내 중복 ping 방지 (hard reload 반복 요청 억제)
+    if (sessionStorage.getItem("backend_pinged")) return;
+    sessionStorage.setItem("backend_pinged", "1");
     fetch(`${API_URL}/health`).catch(() => {});
   }, []);
 

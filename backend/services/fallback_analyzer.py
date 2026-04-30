@@ -109,7 +109,8 @@ def generate_personalized_content(
         f"{age}세 {risk_tol} 투자자의 포트폴리오는 {comp_str}으로 구성된 {dominance} 포트폴리오입니다. "
         f"투자 목표 '{goal}'에 맞춰 월 {monthly:,}만원씩 {total:,}만원 규모의 자산을 운용하고 있으며, "
         f"리스크 점수 {risk_score}/100({risk_grade})으로 평가됩니다. "
-        f"은퇴까지 약 {years_to_retire}년의 투자 기간이 남아 있어 {structure_comment}"
+        f"은퇴까지 약 {years_to_retire}년의 투자 기간이 남아 있어 {structure_comment} "
+        f"기본 시나리오 기준 5년 후 {simulation.base.final_value:,.0f}만원(연 {simulation.base.cagr:.1f}%)이 예상됩니다."
     )
 
     # ── 강점 ─────────────────────────────────────────────────────
@@ -522,6 +523,7 @@ def generate_personalized_preview_summary(
     market_snapshot: MarketSnapshot,
     risk_score: int,
     risk_grade: str,
+    simulation: SimulationResult | None = None,
 ) -> str:
     """미리보기용 개인화 요약 문장"""
     g = _group_weights(portfolio)
@@ -541,10 +543,18 @@ def generate_personalized_preview_summary(
         comp_parts.append(f"현금 {g['cash']:.0f}%")
     comp_str = "·".join(comp_parts) if comp_parts else "다양한 자산"
 
+    if simulation is not None:
+        projection = (
+            f"5년 후 {simulation.base.final_value:,.0f}만원(기본 시나리오) · "
+            f"비관 {simulation.bear.final_value:,.0f}만원~낙관 {simulation.bull.final_value:,.0f}만원 범위가 예상됩니다. "
+        )
+    else:
+        projection = "5년 후 자산 성장이 기대됩니다. "
+
     return (
         f"{age}세 {goal} 목표의 {comp_str} 포트폴리오입니다. "
         f"리스크 점수 {risk_score}/100({risk_grade})으로 평가되며, "
         f"월 {portfolio.monthly_saving:,}만원 정기 적립 시 "
-        f"5년 후 자산 성장이 기대됩니다. "
+        f"{projection}"
         f"포트폴리오 강점과 리밸런싱 전략을 전체 리포트에서 확인하세요."
     )

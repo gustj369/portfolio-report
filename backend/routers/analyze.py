@@ -41,7 +41,7 @@ async def analyze_portfolio(
         # 4. AI 간략 요약 생성
         from services.fallback_analyzer import generate_personalized_preview_summary
         summary = generate_personalized_preview_summary(
-            request.user_profile, request.portfolio, market_snapshot, risk_score, risk_grade
+            request.user_profile, request.portfolio, market_snapshot, risk_score, risk_grade, simulation
         )
         ai_risk_score = risk_score
         ai_risk_grade = risk_grade
