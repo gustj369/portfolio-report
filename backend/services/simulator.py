@@ -68,10 +68,8 @@ def _simulate_scenario(
     max_drawdown = 0.0
 
     for _ in range(months):
-        # 월 수익 적용
-        current_value = current_value * (1 + monthly_return)
-        # 월 적립금 추가
-        current_value += monthly_contribution
+        # 월 초 적립 후 수익 적용 (annuity-due: 기여분도 해당 월 수익 반영)
+        current_value = (current_value + monthly_contribution) * (1 + monthly_return)
 
         # 최대 낙폭 계산
         if current_value > peak_value:

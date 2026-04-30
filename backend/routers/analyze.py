@@ -3,6 +3,7 @@
 """
 from fastapi import APIRouter, HTTPException, Depends
 import logging
+import time
 
 from config import get_settings, Settings
 from models.portfolio import AnalyzeRequest
@@ -27,13 +28,18 @@ async def analyze_portfolio(
     - AI 요약 생성 (간략 버전)
     """
     try:
+        t0 = time.perf_counter()
+
         # 1. 시장 데이터 수집
         logger.info("시장 데이터 수집 시작")
         market_snapshot = fetch_market_snapshot(settings.fred_api_key)
+        t1 = time.perf_counter()
+        logger.info(f"시장 데이터 수집 완료 ({t1 - t0:.2f}s)")
 
         # 2. 5년 시뮬레이션
-        logger.info("시뮬레이션 실행 시작")
         simulation = run_simulation(request.portfolio, market_snapshot)
+        t2 = time.perf_counter()
+        logger.info(f"시뮬레이션 완료 ({t2 - t1:.2f}s)")
 
         # 3. 리스크 점수 계산
         risk_score, risk_grade = calculate_risk_score(request.portfolio, market_snapshot)
@@ -55,9 +61,12 @@ async def analyze_portfolio(
                     market_snapshot,
                     settings.gemini_api_key,
                 )
+                t3 = time.perf_counter()
+                logger.info(f"AI 분석 완료 ({t3 - t2:.2f}s)")
             except Exception as e:
                 logger.warning(f"AI 분석 실패 (기본값 사용): {e}")
 
+        logger.info(f"미리보기 분석 완료 (총 {time.perf_counter() - t0:.2f}s)")
         return PreviewResponse(
             risk_score=ai_risk_score,
             risk_grade=ai_risk_grade,

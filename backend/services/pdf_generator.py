@@ -45,6 +45,18 @@ FONT_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "f
 FONT_REGULAR = "KoreanFont"
 FONT_BOLD = "KoreanFont-Bold"
 
+# Linux 시스템 한글 폰트 후보 경로 (Render apt fonts-nanum 우선)
+_LINUX_FONT_CANDIDATES = [
+    (
+        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+        "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
+    ),  # fonts-nanum (Render buildCommand에서 설치)
+    (
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+    ),  # fonts-noto-cjk
+]
+
 # Windows 시스템 한글 폰트 후보 경로 (맑은 고딕 우선)
 _WINDOWS_FONT_CANDIDATES = [
     (r"C:\Windows\Fonts\malgun.ttf",    r"C:\Windows\Fonts\malgunbd.ttf"),   # 맑은 고딕
@@ -63,7 +75,12 @@ def _find_korean_font() -> tuple[str | None, str | None]:
     if os.path.exists(noto_regular):
         return noto_regular, noto_bold if os.path.exists(noto_bold) else noto_regular
 
-    # 2순위: Windows 시스템 한글 폰트
+    # 2순위: Linux 시스템 한글 폰트 (Render 환경 — fonts-nanum / fonts-noto-cjk)
+    for reg_path, bold_path in _LINUX_FONT_CANDIDATES:
+        if os.path.exists(reg_path):
+            return reg_path, bold_path if os.path.exists(bold_path) else reg_path
+
+    # 3순위: Windows 시스템 한글 폰트
     for reg_path, bold_path in _WINDOWS_FONT_CANDIDATES:
         if os.path.exists(reg_path):
             return reg_path, bold_path if os.path.exists(bold_path) else reg_path
