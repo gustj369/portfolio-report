@@ -227,6 +227,7 @@ async def _generate_report_background(
 
         # 2. 시뮬레이션
         simulation = run_simulation(analyze_req.portfolio, market_snapshot)
+        logger.info(f"[{report_token}] 시뮬레이션 완료 ({int((datetime.now(KST)-t0).total_seconds())}s)")
 
         # 3. 전체 AI 분석
         t_ai = datetime.now(KST)
@@ -253,7 +254,8 @@ async def _generate_report_background(
         logger.info(f"[{report_token}] AI 분석 완료 ({int((datetime.now(KST)-t_ai).total_seconds())}s)")
 
         # 4. 차트 생성 — 개별 실패 시 None 반환 (PDF는 해당 차트 없이 계속 생성)
-        logger.info(f"[{report_token}] 차트 생성")
+        t_chart = datetime.now(KST)
+        logger.info(f"[{report_token}] 차트 생성 시작 ({int((t_chart-t0).total_seconds())}s)")
         def _safe_chart(fn, *args):
             try:
                 return fn(*args)
@@ -269,6 +271,7 @@ async def _generate_report_background(
                                         analyze_req.portfolio,
                                         ai_content.rebalancing_recommendations),
         }
+        logger.info(f"[{report_token}] 차트 생성 완료 ({int((datetime.now(KST)-t_chart).total_seconds())}s)")
 
         # 5. PDF 생성
         t_pdf = datetime.now(KST)

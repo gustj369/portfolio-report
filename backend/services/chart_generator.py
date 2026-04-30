@@ -31,6 +31,8 @@ COLORS_PIE = ["#d4af37", "#1a2e5a", "#3498db", "#27ae60", "#e74c3c",
 # 한글 폰트 후보 (우선순위 순)
 _FONT_CANDIDATES = [
     os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "fonts", "NotoSansKR-Regular.ttf"),
+    "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",      # Linux: fonts-nanum (Render)
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",  # Linux: fonts-noto-cjk
     r"C:\Windows\Fonts\malgun.ttf",    # 맑은 고딕 (Windows)
     r"C:\Windows\Fonts\gulim.ttc",     # 굴림
 ]
