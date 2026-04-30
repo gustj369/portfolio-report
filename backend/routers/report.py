@@ -5,6 +5,7 @@ PDF 리포트 생성 라우터
 import uuid
 import os
 import logging
+import time
 from datetime import datetime, timezone, timedelta
 
 KST = timezone(timedelta(hours=9))
@@ -84,7 +85,11 @@ async def generate_report(
     # 결제 확인
     payment = get_confirmed_payment(body.report_token)
     if not payment:
-        raise HTTPException(status_code=403, detail="유효하지 않은 리포트 토큰입니다.")
+        # report_token TTL(7일) 만료 또는 미결제 — 스토리지 TTL 삭제로 두 경우 구분 불가
+        raise HTTPException(
+            status_code=403,
+            detail="결제 정보를 찾을 수 없습니다. 결제 후 7일이 경과했거나 유효하지 않은 요청입니다.",
+        )
 
     # 이미 생성 중/완료인 경우 — GENERATING/READY만 차단, ERROR/PENDING은 재시도 허용
     existing = _load_record(body.report_token)
@@ -211,7 +216,7 @@ async def _generate_report_background(
         return
 
     try:
-        t0 = datetime.now(KST)  # 전체 소요시간 측정 기준점
+        t0 = time.perf_counter()  # 전체 소요시간 측정 기준점
 
         # 상태 업데이트: GENERATING
         record.status = ReportStatus.GENERATING
@@ -223,15 +228,15 @@ async def _generate_report_background(
         # 1. 시장 데이터 수집
         logger.info(f"[{report_token}] 시장 데이터 수집 시작")
         market_snapshot = fetch_market_snapshot(settings.fred_api_key)
-        logger.info(f"[{report_token}] 시장 데이터 수집 완료 ({int((datetime.now(KST)-t0).total_seconds())}s)")
+        logger.info(f"[{report_token}] 시장 데이터 수집 완료 ({time.perf_counter()-t0:.2f}s)")
 
         # 2. 시뮬레이션
         simulation = run_simulation(analyze_req.portfolio, market_snapshot)
-        logger.info(f"[{report_token}] 시뮬레이션 완료 ({int((datetime.now(KST)-t0).total_seconds())}s)")
+        logger.info(f"[{report_token}] 시뮬레이션 완료 ({time.perf_counter()-t0:.2f}s)")
 
         # 3. 전체 AI 분석
-        t_ai = datetime.now(KST)
-        logger.info(f"[{report_token}] AI 분석 시작 ({int((t_ai-t0).total_seconds())}s)")
+        t_ai = time.perf_counter()
+        logger.info(f"[{report_token}] AI 분석 시작 ({t_ai-t0:.2f}s)")
         if settings.gemini_api_key:
             ai_content = generate_full_analysis(
                 analyze_req.user_profile,
@@ -251,11 +256,11 @@ async def _generate_report_background(
                 risk_score,
                 risk_grade,
             )
-        logger.info(f"[{report_token}] AI 분석 완료 ({int((datetime.now(KST)-t_ai).total_seconds())}s)")
+        logger.info(f"[{report_token}] AI 분석 완료 ({time.perf_counter()-t_ai:.2f}s)")
 
         # 4. 차트 생성 — 개별 실패 시 None 반환 (PDF는 해당 차트 없이 계속 생성)
-        t_chart = datetime.now(KST)
-        logger.info(f"[{report_token}] 차트 생성 시작 ({int((t_chart-t0).total_seconds())}s)")
+        t_chart = time.perf_counter()
+        logger.info(f"[{report_token}] 차트 생성 시작 ({t_chart-t0:.2f}s)")
         def _safe_chart(fn, *args):
             try:
                 return fn(*args)
@@ -271,11 +276,11 @@ async def _generate_report_background(
                                         analyze_req.portfolio,
                                         ai_content.rebalancing_recommendations),
         }
-        logger.info(f"[{report_token}] 차트 생성 완료 ({int((datetime.now(KST)-t_chart).total_seconds())}s)")
+        logger.info(f"[{report_token}] 차트 생성 완료 ({time.perf_counter()-t_chart:.2f}s)")
 
         # 5. PDF 생성
-        t_pdf = datetime.now(KST)
-        logger.info(f"[{report_token}] PDF 생성 시작 ({int((t_pdf-t0).total_seconds())}s)")
+        t_pdf = time.perf_counter()
+        logger.info(f"[{report_token}] PDF 생성 시작 ({t_pdf-t0:.2f}s)")
         pdf_bytes = build_report(
             user_profile=analyze_req.user_profile,
             portfolio=analyze_req.portfolio,
@@ -284,7 +289,7 @@ async def _generate_report_background(
             market_snapshot=market_snapshot,
             charts=charts,
         )
-        logger.info(f"[{report_token}] PDF 생성 완료 ({int((datetime.now(KST)-t_pdf).total_seconds())}s)")
+        logger.info(f"[{report_token}] PDF 생성 완료 ({time.perf_counter()-t_pdf:.2f}s)")
 
         # 6. 저장 (로컬 / AWS S3 / Cloudflare R2)
         download_url = await _save_report(report_token, pdf_bytes, settings)
@@ -294,7 +299,7 @@ async def _generate_report_background(
         record.download_url = download_url
         record.completed_at = datetime.now(KST)
         _save_record(record)
-        logger.info(f"[{report_token}] 리포트 생성 완료 (총 {int((datetime.now(KST)-t0).total_seconds())}s): {download_url}")
+        logger.info(f"[{report_token}] 리포트 생성 완료 (총 {time.perf_counter()-t0:.2f}s): {download_url}")
 
         # 8. 이메일 발송 (SMTP 설정 + 사용자 이메일 있는 경우)
         user_email = analyze_req.user_profile.email

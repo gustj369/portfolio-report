@@ -205,10 +205,11 @@ def generate_stacked_bar_chart(
 
     ax.legend(fontsize=10, frameon=False)
 
-    # 최종 금액 레이블
-    for i, (inv, ret) in enumerate(zip(total_invested_at_years, returns_at_years)):
-        total = inv + ret
-        ax.text(i, total + total * 0.02, f"{total:,.0f}", ha="center",
+    # 최종 금액 레이블 — 기본 시나리오 실제 포트폴리오 예상값 표시
+    # (손익분기점 미달 시 스택 바 높이와 레이블 값이 다를 수 있으므로 실제값 사용)
+    for i, actual in enumerate(base_values_at_years):
+        bar_top = total_invested_at_years[i] + returns_at_years[i]
+        ax.text(i, bar_top + bar_top * 0.02, f"{actual:,.0f}", ha="center",
                 va="bottom", fontsize=8, color=NAVY, fontweight="bold")
 
     fig.tight_layout()
