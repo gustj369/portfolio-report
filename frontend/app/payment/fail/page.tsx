@@ -13,6 +13,11 @@ const CODE_HINTS: Record<string, string> = {
   CARD_PROCESSING_ERROR: "카드 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해보세요.",
   INVALID_CARD_EXPIRATION: "카드 유효기간이 올바르지 않습니다. 카드 정보를 확인해주세요.",
   INVALID_STOPPED_CARD: "사용이 정지된 카드입니다. 다른 카드로 시도해보세요.",
+  BELOW_MINIMUM_AMOUNT: "최소 결제 금액 미만입니다.",
+  INVALID_CARD_NUMBER: "카드 번호가 올바르지 않습니다. 카드 정보를 다시 확인해주세요.",
+  NOT_SUPPORTED_CARD_TYPE: "지원하지 않는 카드 종류입니다. 다른 카드로 시도해보세요.",
+  BANK_SERVER_ERROR: "은행 서버 오류입니다. 잠시 후 다시 시도해보세요.",
+  ACQUIRER_SERVER_ERROR: "카드사 서버 오류입니다. 잠시 후 다시 시도해보세요.",
 };
 
 function FailContent() {

@@ -101,7 +101,7 @@ async def confirm_payment(
         # 이미 처리된 주문인지 확인 (네트워크 재시도·이중 요청 멱등성)
         cached = storage_get(f"{_IDEMPOTENCY_PFX}{body.order_id}")
         if cached:
-            logger.info(f"중복 confirm 요청 — 캐시된 토큰 반환: {body.order_id}")
+            logger.info(f"중복 confirm 요청 — 캐시된 토큰 반환: {body.order_id} ({time.perf_counter() - t0:.2f}s)")
             return PaymentConfirmResponse(
                 success=True,
                 report_token=cached["report_token"],
@@ -188,7 +188,7 @@ async def free_confirm(body: FreeConfirmInput) -> PaymentConfirmResponse:
     if not pending:
         cached = storage_get(f"{_IDEMPOTENCY_PFX}{body.order_id}")
         if cached:
-            logger.info(f"중복 free-confirm 요청 — 캐시된 토큰 반환: {body.order_id}")
+            logger.info(f"중복 free-confirm 요청 — 캐시된 토큰 반환: {body.order_id} ({time.perf_counter() - t0:.2f}s)")
             return PaymentConfirmResponse(
                 success=True,
                 report_token=cached["report_token"],

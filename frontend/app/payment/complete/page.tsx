@@ -128,12 +128,21 @@ function CompletePageContent() {
         setCurrentStep(1);
         setPhase("generating");
         // 네트워크 오류 시 2초 대기 후 1회 재시도 (토큰은 유효, 백엔드 idempotent)
-        await generateReport(token).catch(async () => {
-          setIsRetrying(true);
-          await new Promise(r => setTimeout(r, 2000));
-          setIsRetrying(false);
-          await generateReport(token); // 재시도 실패 시 외부 catch → errorCode("network")
-        });
+        try {
+          await generateReport(token).catch(async () => {
+            setIsRetrying(true);
+            await new Promise(r => setTimeout(r, 2000));
+            setIsRetrying(false);
+            await generateReport(token);
+          });
+        } catch (e) {
+          // 결제는 완료됐으나 리포트 생성 API 요청 실패
+          // sessionStorage 토큰을 보존해 "다시 시도"(새로고침) 시 confirm 단계 건너뜀
+          setErrorCode("server");
+          setPhase("error");
+          setErrorMsg("리포트 발급 요청에 실패했습니다. 결제는 정상 처리됐으니 잠시 후 다시 시도해주세요.");
+          return;
+        }
 
         // 3. 상태 폴링
         let attempts = 0;
