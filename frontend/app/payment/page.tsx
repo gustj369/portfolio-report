@@ -6,6 +6,8 @@ import Script from "next/script";
 import { useInput } from "@/context/InputContext";
 import { requestPayment, freeConfirmPayment } from "@/lib/api";
 
+const TOSS_SDK_URL = "https://js.tosspayments.com/v1/payment";
+
 declare global {
   interface Window {
     TossPayments: (clientKey: string) => {
@@ -26,6 +28,8 @@ export default function PaymentPage() {
   const [isFree, setIsFree] = useState(false);
   const [error, setError] = useState("");
   const [tossReady, setTossReady] = useState(false);
+  const [isRetryingToss, setIsRetryingToss] = useState(false);
+  const [tossRetryCount, setTossRetryCount] = useState(0);
 
   useEffect(() => {
     if (!previewResponse) {
@@ -50,6 +54,59 @@ export default function PaymentPage() {
   // 실제 Toss 키인지 확인 (live_ck_ 또는 test_ck_ 로 시작하는 실제 키)
   const isRealTossKey = clientKey.startsWith("live_ck_") || clientKey.startsWith("test_ck_D") || clientKey.startsWith("test_ck_O");
 
+  const getTossLoadError = (failedCount: number) => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      return "현재 오프라인 상태로 보입니다. 인터넷 연결을 확인한 뒤 결제 모듈을 다시 불러와주세요.";
+    }
+    if (failedCount >= 2) {
+      return "결제 모듈을 여러 번 불러오지 못했습니다. 광고 차단/보안 확장 프로그램을 잠시 끄거나 다른 네트워크에서 다시 시도해주세요. 문제가 계속되면 Toss CDN 접속이 차단되었을 수 있습니다.";
+    }
+    return "결제 모듈을 불러오지 못했습니다. 아래 버튼으로 다시 불러온 뒤 결제를 시도해주세요.";
+  };
+
+  useEffect(() => {
+    if (!isRealTossKey || tossReady) return;
+
+    const timeout = window.setTimeout(() => {
+      setTossReady(true);
+    }, 8000);
+
+    return () => window.clearTimeout(timeout);
+  }, [isRealTossKey, tossReady]);
+
+  const reloadTossSdk = () => {
+    if (typeof window.TossPayments !== "undefined") {
+      setTossReady(true);
+      setError("");
+      setTossRetryCount(0);
+      return;
+    }
+
+    setIsRetryingToss(true);
+    setTossReady(false);
+    setError("결제 모듈을 다시 불러오는 중입니다.");
+    document.querySelectorAll("script[data-toss-sdk-retry='true']").forEach((script) => script.remove());
+
+    const script = document.createElement("script");
+    script.src = TOSS_SDK_URL;
+    script.async = true;
+    script.dataset.tossSdkRetry = "true";
+    script.onload = () => {
+      setIsRetryingToss(false);
+      setTossReady(true);
+      setError("");
+      setTossRetryCount(0);
+    };
+    script.onerror = () => {
+      const nextRetryCount = tossRetryCount + 1;
+      setIsRetryingToss(false);
+      setTossReady(true);
+      setTossRetryCount(nextRetryCount);
+      setError(getTossLoadError(nextRetryCount));
+    };
+    document.body.appendChild(script);
+  };
+
   const handlePayment = async () => {
     if (!orderId) {
       setError("결제 초기화가 완료되지 않았습니다. 잠시 후 다시 시도해주세요.");
@@ -69,7 +126,7 @@ export default function PaymentPage() {
       } else if (isRealTossKey) {
         // 실제 Toss 키인데 SDK가 로드되지 않은 경우 → 오류 표시 (개발 모드로 우회하지 않음)
         if (typeof window.TossPayments === "undefined") {
-          setError("결제 모듈을 불러오지 못했습니다. 페이지를 새로고침 후 다시 시도해주세요.");
+          setError("결제 모듈을 불러오지 못했습니다. 아래 버튼으로 다시 불러온 뒤 결제를 시도해주세요.");
           setIsLoading(false);
           return;
         }
@@ -99,9 +156,27 @@ export default function PaymentPage() {
 
   if (!previewResponse) return null;
 
+  const canRetryPage = !orderId || tossRetryCount > 0;
+  const tossTroubleshootingItems =
+    typeof navigator !== "undefined" && !navigator.onLine
+      ? ["인터넷 연결이 온라인 상태인지 확인", "연결 복구 후 결제 모듈 다시 불러오기"]
+      : tossRetryCount >= 2
+      ? ["광고 차단 또는 보안 확장 프로그램 잠시 끄기", "회사/학교/공용 네트워크의 CDN 차단 여부 확인", "다른 브라우저나 다른 네트워크에서 다시 시도"]
+      : ["잠시 후 결제 모듈 다시 불러오기", "계속 실패하면 네트워크 상태 확인"];
+
   return (
     <>
-      <Script src="https://js.tosspayments.com/v1/payment" strategy="lazyOnload" onLoad={() => setTossReady(true)} />
+      <Script
+        src={TOSS_SDK_URL}
+        strategy="lazyOnload"
+        onLoad={() => setTossReady(true)}
+        onError={() => {
+          const nextRetryCount = tossRetryCount + 1;
+          setTossReady(true);
+          setTossRetryCount(nextRetryCount);
+          setError(getTossLoadError(nextRetryCount));
+        }}
+      />
       <div className="min-h-screen bg-gray-50 py-8 px-4 flex items-center justify-center">
         <div className="w-full max-w-md">
           <div className="card">
@@ -142,13 +217,25 @@ export default function PaymentPage() {
             {error && (
               <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-xl text-sm">
                 {error}
-                {!orderId && (
-                  <div className="mt-2 text-center">
+                {canRetryPage && (
+                  <div className="mt-3 space-y-2">
+                    <div className="rounded-lg bg-white/70 p-2 text-xs text-red-700">
+                      <p className="font-semibold mb-1">확인할 항목</p>
+                      <ul className="space-y-1 text-left">
+                        {tossTroubleshootingItems.map((item) => (
+                          <li key={item} className="flex gap-1.5">
+                            <span aria-hidden="true">-</span>
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                     <button
-                      onClick={() => window.location.reload()}
-                      className="text-xs text-red-500 hover:text-red-700 underline"
+                      onClick={reloadTossSdk}
+                      disabled={isRetryingToss}
+                      className="block w-full text-center text-xs text-red-500 hover:text-red-700 underline disabled:opacity-60"
                     >
-                      새로고침 후 다시 시도
+                      {isRetryingToss ? "결제 모듈 불러오는 중..." : "결제 모듈 다시 불러오기"}
                     </button>
                   </div>
                 )}

@@ -2,7 +2,6 @@
 PDF 리포트 생성 라우터
 결제 확인 → 전체 분석 → PDF 생성 → 저장 → 다운로드 링크 반환
 """
-import uuid
 import os
 import logging
 import time
@@ -10,7 +9,6 @@ from datetime import datetime, timezone, timedelta
 
 KST = timezone(timedelta(hours=9))
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
-from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from config import get_settings, Settings
@@ -235,8 +233,7 @@ async def _generate_report_background(
         logger.info(f"[{report_token}] 시뮬레이션 완료 ({time.perf_counter()-t0:.2f}s)")
 
         # 3. 전체 AI 분석
-        t_ai = time.perf_counter()
-        logger.info(f"[{report_token}] AI 분석 시작 ({t_ai-t0:.2f}s)")
+        logger.info(f"[{report_token}] AI 분석 시작 ({time.perf_counter()-t0:.2f}s)")
         if settings.gemini_api_key:
             ai_content = generate_full_analysis(
                 analyze_req.user_profile,
@@ -278,7 +275,7 @@ async def _generate_report_background(
                                         analyze_req.portfolio,
                                         ai_content.rebalancing_recommendations),
         }
-        logger.info(f"[{report_token}] 차트 생성 완료 ({time.perf_counter()-t_chart:.2f}s)")
+        logger.info(f"[{report_token}] 차트 생성 완료 ({time.perf_counter()-t0:.2f}s 누적)")
 
         # 5. PDF 생성
         t_pdf = time.perf_counter()
@@ -291,12 +288,11 @@ async def _generate_report_background(
             market_snapshot=market_snapshot,
             charts=charts,
         )
-        logger.info(f"[{report_token}] PDF 생성 완료 ({time.perf_counter()-t_pdf:.2f}s)")
+        logger.info(f"[{report_token}] PDF 생성 완료 ({time.perf_counter()-t0:.2f}s 누적)")
 
         # 6. 저장 (로컬 / AWS S3 / Cloudflare R2)
-        t_save = time.perf_counter()
         download_url = await _save_report(report_token, pdf_bytes, settings)
-        logger.info(f"[{report_token}] 저장 완료 ({time.perf_counter()-t_save:.2f}s)")
+        logger.info(f"[{report_token}] 저장 완료 ({time.perf_counter()-t0:.2f}s 누적)")
 
         # 7. 완료 처리
         record.status = ReportStatus.READY
