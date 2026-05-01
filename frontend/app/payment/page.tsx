@@ -98,11 +98,11 @@ export default function PaymentPage() {
       setTossRetryCount(0);
     };
     script.onerror = () => {
-      const nextRetryCount = tossRetryCount + 1;
+      const nextCount = tossRetryCount + 1;
       setIsRetryingToss(false);
       setTossReady(true);
-      setTossRetryCount(nextRetryCount);
-      setError(getTossLoadError(nextRetryCount));
+      setTossRetryCount(prev => prev + 1);
+      setError(getTossLoadError(nextCount));
     };
     document.body.appendChild(script);
   };
@@ -171,10 +171,10 @@ export default function PaymentPage() {
         strategy="lazyOnload"
         onLoad={() => setTossReady(true)}
         onError={() => {
-          const nextRetryCount = tossRetryCount + 1;
+          const nextCount = tossRetryCount + 1;
           setTossReady(true);
-          setTossRetryCount(nextRetryCount);
-          setError(getTossLoadError(nextRetryCount));
+          setTossRetryCount(prev => prev + 1);
+          setError(getTossLoadError(nextCount));
         }}
       />
       <div className="min-h-screen bg-gray-50 py-8 px-4 flex items-center justify-center">
@@ -219,24 +219,37 @@ export default function PaymentPage() {
                 {error}
                 {canRetryPage && (
                   <div className="mt-3 space-y-2">
-                    <div className="rounded-lg bg-white/70 p-2 text-xs text-red-700">
-                      <p className="font-semibold mb-1">확인할 항목</p>
-                      <ul className="space-y-1 text-left">
-                        {tossTroubleshootingItems.map((item) => (
-                          <li key={item} className="flex gap-1.5">
-                            <span aria-hidden="true">-</span>
-                            <span>{item}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                    <button
-                      onClick={reloadTossSdk}
-                      disabled={isRetryingToss}
-                      className="block w-full text-center text-xs text-red-500 hover:text-red-700 underline disabled:opacity-60"
-                    >
-                      {isRetryingToss ? "결제 모듈 불러오는 중..." : "결제 모듈 다시 불러오기"}
-                    </button>
+                    {!orderId ? (
+                      /* 초기화 실패: 페이지 새로고침이 가장 효과적 */
+                      <button
+                        onClick={() => window.location.reload()}
+                        className="block w-full text-center text-xs text-red-500 hover:text-red-700 underline"
+                      >
+                        새로고침 후 다시 시도
+                      </button>
+                    ) : (
+                      /* SDK 로드 실패: 트러블슈팅 가이드 + 모듈 재로드 */
+                      <>
+                        <div className="rounded-lg bg-white/70 p-2 text-xs text-red-700">
+                          <p className="font-semibold mb-1">확인할 항목</p>
+                          <ul className="space-y-1 text-left">
+                            {tossTroubleshootingItems.map((item) => (
+                              <li key={item} className="flex gap-1.5">
+                                <span aria-hidden="true">-</span>
+                                <span>{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        <button
+                          onClick={reloadTossSdk}
+                          disabled={isRetryingToss}
+                          className="block w-full text-center text-xs text-red-500 hover:text-red-700 underline disabled:opacity-60"
+                        >
+                          {isRetryingToss ? "결제 모듈 불러오는 중..." : "결제 모듈 다시 불러오기"}
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

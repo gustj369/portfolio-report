@@ -258,8 +258,7 @@ async def _generate_report_background(
         logger.info(f"[{report_token}] AI 분석 완료 ({time.perf_counter()-t0:.2f}s 누적)")
 
         # 4. 차트 생성 — 개별 실패 시 None 반환 (PDF는 해당 차트 없이 계속 생성)
-        t_chart = time.perf_counter()
-        logger.info(f"[{report_token}] 차트 생성 시작 ({t_chart-t0:.2f}s)")
+        logger.info(f"[{report_token}] 차트 생성 시작 ({time.perf_counter()-t0:.2f}s)")
         def _safe_chart(fn, *args):
             try:
                 return fn(*args)
@@ -278,8 +277,7 @@ async def _generate_report_background(
         logger.info(f"[{report_token}] 차트 생성 완료 ({time.perf_counter()-t0:.2f}s 누적)")
 
         # 5. PDF 생성
-        t_pdf = time.perf_counter()
-        logger.info(f"[{report_token}] PDF 생성 시작 ({t_pdf-t0:.2f}s)")
+        logger.info(f"[{report_token}] PDF 생성 시작 ({time.perf_counter()-t0:.2f}s)")
         pdf_bytes = build_report(
             user_profile=analyze_req.user_profile,
             portfolio=analyze_req.portfolio,
