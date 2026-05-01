@@ -91,6 +91,7 @@ function CompletePageContent() {
           setLocalReportToken(token);
           setReportToken(token);
           setCurrentStep(1);
+          if (isCancelled) return; // 상태 설정 후 언마운트 방어
           // generateReport는 항상 호출 — 백엔드가 GENERATING/READY이면 조기 반환으로 중복 방지
           // skipGenerate 제거: 백엔드 PENDING 태스크 유실 시 재시도 없이 3분 타임아웃 되는 엣지 케이스 해소
         } else if (preConfirmedToken) {

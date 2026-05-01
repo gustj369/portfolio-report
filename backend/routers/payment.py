@@ -65,6 +65,7 @@ async def request_payment(
     """결제 요청 초기화 — orderId 생성 및 포트폴리오 데이터 임시 저장"""
     t0 = time.perf_counter()
     order_id = f"order_{uuid.uuid4().hex[:16]}"
+    logger.info(f"결제 요청 초기화: {order_id} ({time.perf_counter() - t0:.2f}s)")
 
     storage_set(
         f"{_PENDING_PFX}{order_id}",

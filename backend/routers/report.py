@@ -111,7 +111,8 @@ async def generate_report(
             if created.tzinfo is None:          # naive datetime 안전 처리
                 created = created.replace(tzinfo=KST)
             if (now - created).total_seconds() < 300:
-                logger.warning(
+                # 정상 흐름(새로고침·재시도로 인한 중복) — info 레벨로 기록
+                logger.info(
                     f"[{body.report_token}] PENDING 중복 요청 "
                     f"({int((now - created).total_seconds())}초 경과) — 건너뜀"
                 )
@@ -130,7 +131,14 @@ async def generate_report(
         status=ReportStatus.PENDING,
         created_at=datetime.now(KST),
     )
-    _save_record(record)
+    try:
+        _save_record(record)
+    except Exception as save_err:
+        # PENDING 저장 실패 — 백그라운드 태스크는 계속 시작하지만 폴링이 404를 반환할 수 있음.
+        # record는 직접 전달되므로 태스크 자체는 정상 동작하며, GENERATING/_READY 저장 시 복구됨.
+        logger.warning(
+            f"[{body.report_token}] PENDING 레코드 저장 실패 — 폴링이 404를 반환할 수 있음: {save_err}"
+        )
 
     # 백그라운드에서 PDF 생성 (record를 직접 전달 — 재로드 시 스토리지 장애로 None이 되는 엣지케이스 방지)
     background_tasks.add_task(

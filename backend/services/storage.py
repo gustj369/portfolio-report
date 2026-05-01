@@ -3,6 +3,10 @@
 - REDIS_URL 설정 시: Redis (Upstash 등) 사용
 - 미설정 시: 인메모리 dict fallback (개발 환경)
 
+주의: 인메모리 fallback(_local)은 ttl 파라미터를 무시합니다.
+      키가 만료되지 않으므로 개발 환경에서 장기 실행 시 메모리가 누적될 수 있습니다.
+      프로덕션에서는 반드시 REDIS_URL을 설정하세요.
+
 사용법:
     from services.storage import storage_set, storage_get, storage_delete, storage_exists
     storage_set("key", {"foo": "bar"}, ttl=3600)
@@ -16,7 +20,7 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
-# 인메모리 fallback (Redis 없을 때)
+# 인메모리 fallback (Redis 없을 때) — ttl 미지원, 서버 재시작 시 초기화됨
 _local: dict[str, str] = {}
 
 # Redis 클라이언트 캐시 — 최초 ping 성공 후 재사용 (매 호출 신규 연결·ping 방지)
