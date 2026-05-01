@@ -4,6 +4,7 @@
 import uuid
 import base64
 import logging
+import time
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
@@ -62,6 +63,7 @@ async def request_payment(
     settings: Settings = Depends(get_settings),
 ) -> PaymentRequestResponse:
     """결제 요청 초기화 — orderId 생성 및 포트폴리오 데이터 임시 저장"""
+    t0 = time.perf_counter()
     order_id = f"order_{uuid.uuid4().hex[:16]}"
 
     storage_set(
@@ -75,7 +77,7 @@ async def request_payment(
         ttl=3600,  # 1시간 후 자동 만료
     )
 
-    logger.info(f"결제 요청 생성: {order_id}")
+    logger.info(f"결제 요청 생성: {order_id} ({time.perf_counter() - t0:.2f}s)")
 
     return PaymentRequestResponse(
         order_id=order_id,
@@ -91,6 +93,7 @@ async def confirm_payment(
     settings: Settings = Depends(get_settings),
 ) -> PaymentConfirmResponse:
     """토스페이먼츠 결제 승인 처리"""
+    t0 = time.perf_counter()
 
     # 대기 중인 결제 확인
     pending = storage_get(f"{_PENDING_PFX}{body.order_id}")
@@ -116,6 +119,7 @@ async def confirm_payment(
     if settings.toss_secret_key and body.amount > 0:
         try:
             auth_str = base64.b64encode(f"{settings.toss_secret_key}:".encode()).decode()
+            logger.info(f"토스페이먼츠 API 요청: {body.order_id} ({time.perf_counter() - t0:.2f}s)")
             async with httpx.AsyncClient(timeout=30) as client:
                 response = await client.post(
                     TOSS_CONFIRM_URL,
@@ -131,19 +135,20 @@ async def confirm_payment(
                 )
                 if response.status_code != 200:
                     toss_error = response.json()
-                    logger.error(f"토스페이먼츠 승인 실패: {toss_error}")
+                    logger.error(f"토스페이먼츠 승인 실패: {toss_error} ({time.perf_counter() - t0:.2f}s)")
                     raise HTTPException(
                         status_code=400,
                         detail=f"결제 승인 실패: {toss_error.get('message', '알 수 없는 오류')}",
                     )
+            logger.info(f"토스페이먼츠 API 완료: {body.order_id} ({time.perf_counter() - t0:.2f}s)")
         except httpx.RequestError as e:
-            logger.error(f"토스페이먼츠 API 연결 오류: {e}")
+            logger.error(f"토스페이먼츠 API 연결 오류: {e} ({time.perf_counter() - t0:.2f}s)")
             raise HTTPException(status_code=503, detail="결제 서버 연결 오류")
     elif body.amount == 0:
-        logger.info(f"무료(0원) 결제 확인 — Toss 승인 건너뜀: {body.order_id}")
+        logger.info(f"무료(0원) 결제 확인 — Toss 승인 건너뜀: {body.order_id} ({time.perf_counter() - t0:.2f}s)")
     else:
         # 개발 모드: 토스 키 없으면 승인 통과
-        logger.warning(f"토스 시크릿 키 없음 — 개발 모드로 결제 승인: {body.order_id}")
+        logger.warning(f"토스 시크릿 키 없음 — 개발 모드로 결제 승인: {body.order_id} ({time.perf_counter() - t0:.2f}s)")
 
     # 결제 확인 완료 처리
     report_token = f"rpt_{uuid.uuid4().hex}"
@@ -166,7 +171,7 @@ async def confirm_payment(
         ttl=86400 * 7,
     )
 
-    logger.info(f"결제 승인 완료: {body.order_id} → {report_token}")
+    logger.info(f"결제 승인 완료: {body.order_id} → {report_token} (총 {time.perf_counter() - t0:.2f}s)")
 
     return PaymentConfirmResponse(
         success=True,
@@ -178,6 +183,7 @@ async def confirm_payment(
 @router.post("/free-confirm", response_model=PaymentConfirmResponse)
 async def free_confirm(body: FreeConfirmInput) -> PaymentConfirmResponse:
     """무료(0원) 결제 확인 — Toss 승인 없이 바로 report_token 발급"""
+    t0 = time.perf_counter()
     pending = storage_get(f"{_PENDING_PFX}{body.order_id}")
     if not pending:
         cached = storage_get(f"{_IDEMPOTENCY_PFX}{body.order_id}")
@@ -218,7 +224,7 @@ async def free_confirm(body: FreeConfirmInput) -> PaymentConfirmResponse:
         ttl=86400 * 7,
     )
 
-    logger.info(f"무료 결제 확인 완료: {body.order_id} → {report_token}")
+    logger.info(f"무료 결제 확인 완료: {body.order_id} → {report_token} (총 {time.perf_counter() - t0:.2f}s)")
 
     return PaymentConfirmResponse(
         success=True,

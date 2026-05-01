@@ -39,6 +39,7 @@ You are a careful coding agent working on this repository.
   - Backend health check: `http://localhost:8000/health`
   - Backend API docs: `http://localhost:8000/docs`
   - PDF pipeline smoke test: `cd backend`, `python test_pipeline.py`
+  - If `python` is not on PATH, use an OS-appropriate command: Windows `.\.venv\Scripts\python.exe test_pipeline.py`, macOS/Linux `.venv/bin/python test_pipeline.py` or `python3 test_pipeline.py`.
   - Frontend build/lint: `cd frontend`, `npm run build`, `npm run lint`
 
 ## 4. Coding Style
@@ -82,6 +83,10 @@ You are a careful coding agent working on this repository.
 - PDF와 폰트:
   - PDF 관련 변경은 한글 폰트, 줄바꿈, 표/차트 렌더링을 확인한다.
   - 배포 환경은 `render.yaml`의 폰트 설치 명령과 `backend/assets/fonts` fallback을 함께 고려한다.
+- 로컬 환경 메모:
+  - `git status` 중 `C:\Users\gustj/.config/git/ignore` 접근 권한 경고가 보일 수 있다. 이는 사용자 홈의 Git 전역 설정 권한 문제이며, 저장소 코드 변경으로 해결하지 않는다.
+  - 이 경고는 `git config --get core.excludesfile`로 참조 경로를 확인한 뒤, 사용자 홈 파일 권한을 조정하거나 접근 가능한 전역 ignore 파일로 다시 설정한다.
+  - 로컬 환경 문제 해결 안내는 `TROUBLESHOOTING.md`에 둔다.
 
 ## 6. Workflow
 

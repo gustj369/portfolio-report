@@ -114,9 +114,11 @@ function CompletePageContent() {
             setReportToken(token);
             sessionStorage.setItem(`rpt_${orderId}`, token);
           } catch (e) {
-            // 결제 확인 실패는 네트워크 오류와 구분 (만료·금액 불일치 등)
-            setErrorCode("payment");
+            // 결제 확인 실패: HTTP 상태에 따라 errorCode 분기
+            // 503(Toss 서버 연결 오류)은 재시도 안내, 그 외(만료·금액 불일치 등)는 처음부터 안내
+            const httpStatus = (e as any).httpStatus;
             setPhase("error");
+            setErrorCode(httpStatus === 503 ? "server" : "payment");
             setErrorMsg(e instanceof Error ? e.message : "결제 확인 중 오류가 발생했습니다.");
             return;
           }

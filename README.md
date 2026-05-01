@@ -48,6 +48,8 @@ python test_pipeline.py
 # test_report.pdf 파일이 생성됩니다
 ```
 
+`python` 명령을 찾을 수 없는 환경에서는 아래의 [로컬 문제 해결](#로컬-문제-해결)을 참고하세요.
+
 ---
 
 ## 환경 변수
@@ -133,6 +135,12 @@ npx vercel --prod
 ```
 
 환경 변수: 위 표의 백엔드 변수 모두 설정
+
+---
+
+## 로컬 문제 해결
+
+Python 실행 경로, Git 전역 ignore 권한 경고, Toss 결제 모듈 로드 실패는 [TROUBLESHOOTING.md](./TROUBLESHOOTING.md)를 참고하세요.
 
 ---
 
