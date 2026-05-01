@@ -49,6 +49,9 @@ export default function PaymentPage() {
         setError(e instanceof Error ? e.message : "결제 초기화 실패");
       }
     })();
+  // userProfile, portfolio 를 deps에 추가하면 effect 내부의 setOrderId 호출이
+  // context state 를 spread 업데이트 → userProfile/portfolio 새 참조 생성 → 재실행 무한 루프
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [previewResponse, router]);
 
   // 실제 Toss 키인지 확인 (live_ck_ 또는 test_ck_ 로 시작하는 실제 키)
