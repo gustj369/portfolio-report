@@ -42,13 +42,13 @@ def generate_full_analysis(
     portfolio_data = _build_portfolio_context(user_profile, portfolio, simulation, market_snapshot)
 
     # 1. 포트폴리오 종합 진단
-    diagnosis_result = _call_gemini(model, _build_diagnosis_prompt(portfolio_data))
+    diagnosis_result = _call_gemini(model, _build_diagnosis_prompt(portfolio_data), label="진단")
 
     # 2. 리밸런싱 추천
-    rebalancing_result = _call_gemini(model, _build_rebalancing_prompt(portfolio_data, portfolio))
+    rebalancing_result = _call_gemini(model, _build_rebalancing_prompt(portfolio_data, portfolio), label="리밸런싱")
 
     # 3. 시장 코멘트 + 주의사항
-    market_result = _call_gemini(model, _build_market_prompt(portfolio_data))
+    market_result = _call_gemini(model, _build_market_prompt(portfolio_data), label="시장코멘트")
 
     return _parse_ai_results(diagnosis_result, rebalancing_result, market_result, simulation, portfolio)
 
@@ -82,7 +82,7 @@ def generate_preview_summary(
   "risk_grade": "안정형" 또는 "중립형" 또는 "공격형"
 }}"""
 
-    result = _call_gemini(model, prompt)
+    result = _call_gemini(model, prompt, label="미리보기")
 
     try:
         data = json.loads(_extract_json(result))
@@ -195,20 +195,23 @@ def _build_market_prompt(portfolio_data: str) -> str:
 }}"""
 
 
-def _call_gemini(model: genai.GenerativeModel, prompt: str) -> str:
+def _call_gemini(model: genai.GenerativeModel, prompt: str, label: str = "") -> str:
     """Gemini API 호출 (최대 3회 재시도)"""
     config = genai.types.GenerationConfig(
         temperature=0.4,
         max_output_tokens=1500,
     )
+    _label = f"[{label}] " if label else ""
 
     for attempt in range(3):
         try:
+            t_start = time.perf_counter()
             response = model.generate_content(
                 prompt,
                 generation_config=config,
                 request_options={"timeout": 60},  # 60초 초과 시 DeadlineExceeded → retry
             )
+            logger.info(f"Gemini {_label}완료 ({time.perf_counter()-t_start:.2f}s)")
             return response.text
         except Exception as e:
             error_msg = str(e).lower()

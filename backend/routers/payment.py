@@ -32,6 +32,7 @@ class PaymentRequestResponse(BaseModel):
     order_id: str
     amount: int
     client_key: str
+    is_free: bool = False  # amount == 0 여부 — 프론트엔드가 결제 플로우를 명시적으로 분기하기 위한 필드
 
 
 class PaymentConfirmInput(BaseModel):
@@ -80,6 +81,7 @@ async def request_payment(
         order_id=order_id,
         amount=settings.report_price_krw,
         client_key=settings.toss_client_key,
+        is_free=settings.report_price_krw == 0,
     )
 
 

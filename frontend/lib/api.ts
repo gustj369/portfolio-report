@@ -33,6 +33,7 @@ export async function requestPayment(analyzeRequest: AnalyzeRequest): Promise<{
   order_id: string;
   amount: number;
   client_key: string;
+  is_free: boolean;
 }> {
   return apiFetch("/payment/request", {
     method: "POST",
@@ -52,6 +53,17 @@ export async function confirmPayment(params: {
   return apiFetch("/payment/confirm", {
     method: "POST",
     body: JSON.stringify(params),
+  });
+}
+
+export async function freeConfirmPayment(orderId: string): Promise<{
+  success: boolean;
+  report_token: string;
+  message: string;
+}> {
+  return apiFetch("/payment/free-confirm", {
+    method: "POST",
+    body: JSON.stringify({ order_id: orderId }),
   });
 }
 
