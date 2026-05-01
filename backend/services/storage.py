@@ -135,5 +135,9 @@ def storage_exists(key: str) -> bool:
         except Exception as e:
             logger.warning(f"Redis exists 실패 — 캐시 무효화 후 인메모리 fallback 사용: {e}")
             _reset_redis_cache()
-            return key in _local
-    return key in _local
+            result = key in _local
+            logger.debug(f"인메모리 fallback exists 확인 (Redis 장애 후): key={key!r} → {result}")
+            return result
+    result = key in _local
+    logger.debug(f"인메모리 exists 확인 (Redis 미설정): key={key!r} → {result}")
+    return result

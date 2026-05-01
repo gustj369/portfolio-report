@@ -187,6 +187,7 @@ async def confirm_payment(
         {"report_token": report_token},
         ttl=86400 * 7,
     )
+    logger.info(f"결제 스토리지 저장 완료: {body.order_id} → {report_token} ({time.perf_counter() - t0:.2f}s)")
 
     logger.info(f"결제 승인 완료: {body.order_id} → {report_token} (총 {time.perf_counter() - t0:.2f}s)")
 

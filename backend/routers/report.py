@@ -184,9 +184,11 @@ async def download_report(report_token: str, settings: Settings = Depends(get_se
     """리포트 다운로드 — R2/S3에서 읽어 직접 스트리밍 (CORS 우회)"""
     record = _load_record(report_token)
     if not record:
+        logger.info(f"[{report_token}] 다운로드 요청 — 레코드 없음 → 404 반환 (만료 또는 잘못된 토큰)")
         raise HTTPException(status_code=404, detail="리포트를 찾을 수 없습니다.")
 
     if record.status != ReportStatus.READY:
+        logger.info(f"[{report_token}] 다운로드 요청 — 상태 {record.status.value} → 409 반환")
         raise HTTPException(status_code=409, detail="리포트가 아직 준비되지 않았습니다.")
 
     filename = f"report_{report_token}.pdf"

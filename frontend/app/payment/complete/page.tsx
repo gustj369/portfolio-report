@@ -178,6 +178,7 @@ function CompletePageContent() {
             // 404: 리포트 레코드 없음 → 토큰 만료(7일) 또는 잘못된 토큰
             if (e instanceof Error && (e as any).httpStatus === 404) {
               sessionStorage.removeItem(`rpt_${orderId}`);
+              if (isCancelled) return; // 언마운트 후 상태 업데이트 방어
               setErrorCode("expired");
               setPhase("error");
               setErrorMsg("리포트가 만료되었습니다. (리포트는 7일간 보관됩니다)");
@@ -186,6 +187,7 @@ function CompletePageContent() {
             // 그 외 네트워크 오류: poll은 setTimeout 콜백이므로 외부 try-catch에 걸리지 않음
             // → unhandled rejection 방지를 위해 직접 처리
             sessionStorage.removeItem(`rpt_${orderId}`);
+            if (isCancelled) return; // 언마운트 후 상태 업데이트 방어
             setErrorCode("network");
             setPhase("error");
             setErrorMsg(e instanceof Error ? e.message : "네트워크 오류가 발생했습니다.");
