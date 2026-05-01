@@ -111,11 +111,13 @@ function CompletePageContent() {
               order_id: orderId,
               amount: Number(amount),
             });
+            if (isCancelled) return; // confirm 완료 전 언마운트 방어
             token = confirmResult.report_token;
             setLocalReportToken(token);
             setReportToken(token);
             sessionStorage.setItem(`rpt_${orderId}`, token);
           } catch (e) {
+            if (isCancelled) return; // confirm 실패 전 언마운트 방어
             // 결제 확인 실패: HTTP 상태에 따라 errorCode 분기
             // 503(Toss 서버 연결 오류)은 재시도 안내, 그 외(만료·금액 불일치 등)는 처음부터 안내
             const httpStatus = (e as any).httpStatus;
@@ -138,6 +140,7 @@ function CompletePageContent() {
             await generateReport(token);
           });
         } catch (e) {
+          if (isCancelled) return; // generateReport 실패 전 언마운트 방어
           // 결제는 완료됐으나 리포트 생성 API 요청 실패
           // sessionStorage 토큰을 보존해 "다시 시도"(새로고침) 시 confirm 단계 건너뜀
           setErrorCode("server");

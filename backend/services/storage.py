@@ -52,7 +52,11 @@ def storage_set(key: str, value: Any, ttl: int = 86400 * 7) -> None:
     serialized = json.dumps(value, ensure_ascii=False, default=str)
     r = _get_redis()
     if r:
-        r.set(key, serialized, ex=ttl)
+        try:
+            r.set(key, serialized, ex=ttl)
+        except Exception as e:
+            logger.warning(f"Redis set 실패 — 인메모리 fallback 사용: {e}")
+            _local[key] = serialized
     else:
         _local[key] = serialized
 
@@ -60,7 +64,11 @@ def storage_set(key: str, value: Any, ttl: int = 86400 * 7) -> None:
 def storage_get(key: str) -> Optional[Any]:
     """키로 값 조회. 없으면 None."""
     r = _get_redis()
-    raw = r.get(key) if r else _local.get(key)
+    try:
+        raw = r.get(key) if r else _local.get(key)
+    except Exception as e:
+        logger.warning(f"Redis get 실패 — 인메모리 fallback 사용: {e}")
+        raw = _local.get(key)
     if raw is None:
         return None
     try:
@@ -73,7 +81,11 @@ def storage_delete(key: str) -> None:
     """키 삭제."""
     r = _get_redis()
     if r:
-        r.delete(key)
+        try:
+            r.delete(key)
+        except Exception as e:
+            logger.warning(f"Redis delete 실패 — 인메모리에서만 삭제: {e}")
+            _local.pop(key, None)
     else:
         _local.pop(key, None)
 

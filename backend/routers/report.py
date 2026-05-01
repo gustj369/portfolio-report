@@ -132,10 +132,11 @@ async def generate_report(
     )
     _save_record(record)
 
-    # 백그라운드에서 PDF 생성
+    # 백그라운드에서 PDF 생성 (record를 직접 전달 — 재로드 시 스토리지 장애로 None이 되는 엣지케이스 방지)
     background_tasks.add_task(
         _generate_report_background,
         body.report_token,
+        record,
         payment,
         settings,
     )
@@ -205,15 +206,11 @@ async def download_report(report_token: str, settings: Settings = Depends(get_se
 
 async def _generate_report_background(
     report_token: str,
+    record: ReportRecord,
     payment: dict,
     settings: Settings,
 ):
-    """백그라운드 PDF 생성 태스크"""
-    record = _load_record(report_token)
-    if not record:
-        logger.error(f"[{report_token}] 레코드 없음 — 생성 불가")
-        return
-
+    """백그라운드 PDF 생성 태스크 (record는 호출부에서 직접 전달)"""
     try:
         t0 = time.perf_counter()  # 전체 소요시간 측정 기준점
 
