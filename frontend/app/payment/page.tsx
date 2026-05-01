@@ -109,7 +109,7 @@ export default function PaymentPage() {
               <p className="text-blue-200 text-sm mb-1">주문 내역</p>
               <p className="text-lg font-bold">포트폴리오 AI 분석 리포트</p>
               <div className="mt-3 pt-3 border-t border-blue-700 flex justify-between items-center">
-                <span className="text-blue-200 text-sm">결제 금액</span>
+                <span className="text-blue-200 text-sm">{isFree ? "무료 제공" : "결제 금액"}</span>
                 <span className="text-gold-400 text-2xl font-bold">
                   {isFree ? "무료" : `${amount.toLocaleString()}원`}
                 </span>

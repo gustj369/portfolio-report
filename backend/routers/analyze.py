@@ -43,6 +43,7 @@ async def analyze_portfolio(
 
         # 3. 리스크 점수 계산
         risk_score, risk_grade = calculate_risk_score(request.portfolio, market_snapshot)
+        logger.info(f"리스크 점수: {risk_score} ({risk_grade})")
 
         # 4. AI 간략 요약 생성
         from services.fallback_analyzer import generate_personalized_preview_summary
