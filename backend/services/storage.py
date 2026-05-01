@@ -30,7 +30,12 @@ def _reset_redis_cache() -> None:
 
 
 def _get_redis():
-    """Redis 클라이언트 반환. 캐시된 클라이언트 재사용. 설정 없거나 연결 실패 시 None."""
+    """Redis 클라이언트 반환. 캐시된 클라이언트 재사용. 설정 없거나 연결 실패 시 None.
+
+    연결 성공 시 _redis_client_cache 에 저장 → 이후 호출은 ping 없이 재사용.
+    연결 실패 시 _redis_client_cache 를 명시적으로 None 유지 → 다음 호출에서 재시도.
+    (operation 실패 시에는 _reset_redis_cache() 가 None 으로 초기화하여 재연결 경로 열어둠)
+    """
     global _redis_client_cache
     if _redis_client_cache is not None:
         return _redis_client_cache
@@ -46,14 +51,16 @@ def _get_redis():
             socket_connect_timeout=5,
             socket_timeout=5,
         )
-        client.ping()  # 최초 연결 확인
+        client.ping()  # 최초 연결 확인 — 성공해야 캐시에 저장
         _redis_client_cache = client
         return _redis_client_cache
     except ImportError:
         logger.warning("redis 패키지 미설치 — 인메모리 fallback 사용")
+        _redis_client_cache = None  # 명시적 미캐시: 다음 호출에서 재시도 가능
         return None
     except Exception as e:
         logger.warning(f"Redis 연결 실패 — 인메모리 fallback 사용: {e}")
+        _redis_client_cache = None  # 명시적 미캐시: 다음 호출에서 재시도 가능
         return None
 
 

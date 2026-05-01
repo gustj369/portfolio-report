@@ -326,9 +326,11 @@ async def _generate_report_background(
                 if sent:
                     logger.info(f"[{report_token}] 이메일 발송 완료: {user_email}")
                 else:
-                    logger.warning(f"[{report_token}] 이메일 발송 실패 (주소: {user_email})")
+                    # 발송 실패는 리포트 생성 자체에 영향 없음 — info 레벨로 기록
+                    logger.info(f"[{report_token}] 이메일 발송 실패 (주소: {user_email})")
             except Exception as email_err:
-                logger.warning(f"[{report_token}] 이메일 발송 예외 (무시): {email_err}")
+                # 발송 예외도 치명적 아님 (PDF는 이미 완료) — info 레벨로 기록
+                logger.info(f"[{report_token}] 이메일 발송 예외 (무시): {email_err}")
         elif user_email:
             logger.info(f"[{report_token}] SMTP 미설정 — 이메일 발송 건너뜀 (주소: {user_email})")
 
@@ -387,6 +389,8 @@ async def _save_report(report_token: str, pdf_bytes: bytes, settings: Settings) 
         return presigned_url
 
     # 로컬 저장 (개발 환경)
+    # 반환 경로 "/report/file/{filename}" 는 이 파일 하단의 serve_local_file 라우트
+    # (router prefix "/report" + "/file/{filename}") 와 정확히 일치해야 함.
     filepath = os.path.join(LOCAL_REPORTS_DIR, filename)
     with open(filepath, "wb") as f:
         f.write(pdf_bytes)

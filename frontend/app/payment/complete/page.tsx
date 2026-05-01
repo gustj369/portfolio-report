@@ -38,10 +38,12 @@ function CompletePageContent() {
   const [isSlowWarning, setIsSlowWarning] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [errorCode, setErrorCode] = useState<"timeout" | "server" | "network" | "payment" | "expired" | "">("");
+  const [downloadError, setDownloadError] = useState("");
 
   const handleDownload = async () => {
     if (!downloadUrl) return;
     setIsDownloading(true);
+    setDownloadError(""); // 이전 오류 초기화
     try {
       const res = await fetch(downloadUrl);
       if (!res.ok) throw new Error("다운로드 실패");
@@ -55,7 +57,8 @@ function CompletePageContent() {
       document.body.removeChild(a);
       URL.revokeObjectURL(blobUrl);
     } catch (e) {
-      alert("다운로드에 실패했습니다. 다시 시도해주세요.");
+      // alert 대신 인라인 상태 메시지 — UX 흐름 유지 (페이지 이탈 없음)
+      setDownloadError("다운로드에 실패했습니다. 다시 시도해주세요.");
     } finally {
       setIsDownloading(false);
     }
@@ -241,6 +244,11 @@ function CompletePageContent() {
           >
             {isDownloading ? "다운로드 중..." : "📥 PDF 다운로드"}
           </button>
+
+          {/* 다운로드 실패 인라인 메시지 */}
+          {downloadError && (
+            <p className="text-sm text-red-500 mb-3">{downloadError}</p>
+          )}
 
           {state.userProfile.email && (
             <div className="text-sm text-gray-500 mb-6">

@@ -136,8 +136,11 @@ async def confirm_payment(
                 if response.status_code != 200:
                     toss_error = response.json()
                     logger.error(f"토스페이먼츠 승인 실패: {toss_error} ({time.perf_counter() - t0:.2f}s)")
+                    # Toss 5xx → 503 전달: 프론트엔드가 httpStatus===503 을 "server" 오류로 분기함.
+                    # Toss 4xx → 400 전달: 만료·금액 불일치 등 결제 데이터 문제 → "payment" 오류로 분기.
+                    http_status = 503 if response.status_code >= 500 else 400
                     raise HTTPException(
-                        status_code=400,
+                        status_code=http_status,
                         detail=f"결제 승인 실패: {toss_error.get('message', '알 수 없는 오류')}",
                     )
             logger.info(f"토스페이먼츠 API 완료: {body.order_id} ({time.perf_counter() - t0:.2f}s)")
