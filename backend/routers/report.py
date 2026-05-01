@@ -218,12 +218,14 @@ async def _generate_report_background(
         record.status = ReportStatus.GENERATING
         _save_record(record)
         # 저장 검증: Redis↔인메모리 불일치 시 폴링이 PENDING을 반환할 수 있음을 조기 감지
+        # 검증 실패 시에도 생성을 중단하지 않음 — 이미 결제 완료된 요청이므로 최선을 다해 완료 시도.
+        # 완료 후 READY _save_record 가 성공하면 폴링은 최종적으로 READY를 읽으므로 무해.
         _saved = _load_record(report_token)
         if not _saved or _saved.status != ReportStatus.GENERATING:
             logger.warning(
                 f"[{report_token}] GENERATING 상태 저장 확인 실패 "
                 f"(읽힌 상태: {_saved.status.value if _saved else 'None'}) "
-                f"— 폴링이 PENDING으로 응답할 수 있음"
+                f"— 폴링이 PENDING으로 응답할 수 있음. storage 로그를 확인해주세요."
             )
 
         # AnalyzeRequest 복원

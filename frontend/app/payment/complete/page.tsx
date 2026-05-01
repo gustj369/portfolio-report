@@ -163,7 +163,7 @@ function CompletePageContent() {
             return;
           }
           attempts++;
-          if (attempts === 10) setIsSlowWarning(true); // 약 30초 경과 시 안내
+          if (attempts === 10) setIsSlowWarning(true); // 약 30초 경과 시 안내 (isCancelled 가드가 상단에서 언마운트 시나리오를 방어함)
 
           let status;
           try {
