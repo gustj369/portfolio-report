@@ -211,12 +211,19 @@ def _call_gemini(model: genai.GenerativeModel, prompt: str) -> str:
             )
             return response.text
         except Exception as e:
-            error_msg = str(e)
-            if "429" in error_msg or "quota" in error_msg.lower():
+            error_msg = str(e).lower()
+            if "429" in error_msg or "quota" in error_msg:
                 # Rate limit — 지수 백오프
                 wait = 2 ** attempt * 5
                 logger.warning(f"Gemini rate limit, {wait}초 대기 (시도 {attempt + 1})")
                 time.sleep(wait)
+            elif "deadline" in error_msg or "timeout" in error_msg:
+                # 60초 타임아웃 초과 — 재시도
+                logger.warning(f"Gemini timeout (시도 {attempt + 1}/3), 재시도...")
+                time.sleep(2)
+                if attempt >= 2:
+                    logger.error("Gemini timeout 최종 실패 (3회 초과)")
+                    raise
             elif attempt < 2:
                 logger.warning(f"Gemini API 오류 (시도 {attempt + 1}): {e}")
                 time.sleep(1)

@@ -225,6 +225,10 @@ def generate_stacked_bar_chart(
         ax.text(i, bar_top + bar_top * 0.02, f"{actual:,.0f}", ha="center",
                 va="bottom", fontsize=8, color=NAVY, fontweight="bold")
 
+    # y축 상한 여유 — 레이블이 figure 상단에 잘리지 않도록 15% 여백 확보
+    all_tops = [total_invested_at_years[i] + returns_at_years[i] for i in range(5)]
+    ax.set_ylim(0, max(all_tops) * 1.15)
+
     fig.tight_layout()
     return _fig_to_bytes(fig)
 

@@ -40,6 +40,10 @@ class PaymentConfirmInput(BaseModel):
     amount: int
 
 
+class FreeConfirmInput(BaseModel):
+    order_id: str
+
+
 class PaymentConfirmResponse(BaseModel):
     success: bool
     report_token: str
@@ -133,6 +137,8 @@ async def confirm_payment(
         except httpx.RequestError as e:
             logger.error(f"토스페이먼츠 API 연결 오류: {e}")
             raise HTTPException(status_code=503, detail="결제 서버 연결 오류")
+    elif body.amount == 0:
+        logger.info(f"무료(0원) 결제 확인 — Toss 승인 건너뜀: {body.order_id}")
     else:
         # 개발 모드: 토스 키 없으면 승인 통과
         logger.warning(f"토스 시크릿 키 없음 — 개발 모드로 결제 승인: {body.order_id}")
@@ -164,6 +170,58 @@ async def confirm_payment(
         success=True,
         report_token=report_token,
         message="결제가 완료되었습니다.",
+    )
+
+
+@router.post("/free-confirm", response_model=PaymentConfirmResponse)
+async def free_confirm(body: FreeConfirmInput) -> PaymentConfirmResponse:
+    """무료(0원) 결제 확인 — Toss 승인 없이 바로 report_token 발급"""
+    pending = storage_get(f"{_PENDING_PFX}{body.order_id}")
+    if not pending:
+        cached = storage_get(f"{_IDEMPOTENCY_PFX}{body.order_id}")
+        if cached:
+            logger.info(f"중복 free-confirm 요청 — 캐시된 토큰 반환: {body.order_id}")
+            return PaymentConfirmResponse(
+                success=True,
+                report_token=cached["report_token"],
+                message="이미 처리된 요청입니다.",
+            )
+        raise HTTPException(
+            status_code=404,
+            detail="결제 세션이 만료되었거나 존재하지 않는 주문입니다. (결제 요청 후 1시간 이내에 완료해주세요)",
+        )
+
+    if pending["amount"] != 0:
+        raise HTTPException(
+            status_code=400,
+            detail="이 엔드포인트는 무료(0원) 결제 전용입니다. 유료 결제는 /payment/confirm을 사용하세요.",
+        )
+
+    report_token = f"rpt_{uuid.uuid4().hex}"
+    storage_delete(f"{_PENDING_PFX}{body.order_id}")
+    storage_set(
+        f"{_CONFIRMED_PFX}{report_token}",
+        {
+            "order_id": body.order_id,
+            "payment_key": "",
+            "amount": 0,
+            "analyze_request": pending["analyze_request"],
+            "confirmed_at": datetime.now().isoformat(),
+        },
+        ttl=86400 * 7,
+    )
+    storage_set(
+        f"{_IDEMPOTENCY_PFX}{body.order_id}",
+        {"report_token": report_token},
+        ttl=86400 * 7,
+    )
+
+    logger.info(f"무료 결제 확인 완료: {body.order_id} → {report_token}")
+
+    return PaymentConfirmResponse(
+        success=True,
+        report_token=report_token,
+        message="무료 리포트 발급이 완료되었습니다.",
     )
 
 
