@@ -65,7 +65,7 @@ async def analyze_portfolio(
                 t3 = time.perf_counter()
                 logger.info(f"AI 분석 완료 ({t3 - t2:.2f}s)")
             except Exception as e:
-                logger.warning(f"AI 분석 실패 (기본값 사용): {e}")
+                logger.warning(f"AI 분석 실패 — fallback 사용 ({time.perf_counter() - t2:.2f}s): {e}")
         else:
             logger.info(f"Gemini 미설정 — fallback 분석 사용 ({time.perf_counter() - t2:.2f}s)")
 

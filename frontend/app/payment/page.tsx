@@ -137,7 +137,19 @@ export default function PaymentPage() {
             )}
 
             {error && (
-              <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-xl text-sm">{error}</div>
+              <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-xl text-sm">
+                {error}
+                {!orderId && (
+                  <div className="mt-2 text-center">
+                    <button
+                      onClick={() => window.location.reload()}
+                      className="text-xs text-red-500 hover:text-red-700 underline"
+                    >
+                      새로고침 후 다시 시도
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
 
             <button

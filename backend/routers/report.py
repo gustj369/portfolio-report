@@ -245,6 +245,7 @@ async def _generate_report_background(
                 market_snapshot,
                 settings.gemini_api_key,
             )
+            logger.info(f"[{report_token}] Gemini AI 분석 사용 ({time.perf_counter()-t_ai:.2f}s)")
         else:
             from services.fallback_analyzer import generate_personalized_content
             risk_score, risk_grade = calculate_risk_score(analyze_req.portfolio, market_snapshot)
