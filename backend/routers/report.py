@@ -338,7 +338,14 @@ async def _generate_report_background(
         logger.error(f"[{report_token}] 리포트 생성 실패: {e}", exc_info=True)
         record.status = ReportStatus.ERROR
         record.error_message = str(e)
-        _save_record(record)
+        try:
+            _save_record(record)
+        except Exception as save_err:
+            # ERROR 상태 저장까지 실패한 경우 — 폴링이 GENERATING/PENDING을 계속 반환할 수 있음.
+            # storage 장애일 가능성이 높으므로 storage 로그를 함께 확인할 것.
+            logger.error(
+                f"[{report_token}] ERROR 상태 저장 실패 — 폴링이 이전 상태를 반환할 수 있음: {save_err}"
+            )
 
 
 async def _save_report(report_token: str, pdf_bytes: bytes, settings: Settings) -> str:

@@ -187,6 +187,7 @@ async def confirm_payment(
 async def free_confirm(body: FreeConfirmInput) -> PaymentConfirmResponse:
     """무료(0원) 결제 확인 — Toss 승인 없이 바로 report_token 발급"""
     t0 = time.perf_counter()
+    logger.info(f"무료 결제 확인 요청: {body.order_id} ({time.perf_counter() - t0:.2f}s)")
     pending = storage_get(f"{_PENDING_PFX}{body.order_id}")
     if not pending:
         cached = storage_get(f"{_IDEMPOTENCY_PFX}{body.order_id}")
@@ -226,6 +227,7 @@ async def free_confirm(body: FreeConfirmInput) -> PaymentConfirmResponse:
         {"report_token": report_token},
         ttl=86400 * 7,
     )
+    logger.info(f"무료 결제 토큰 저장 완료: {body.order_id} → {report_token} ({time.perf_counter() - t0:.2f}s)")
 
     logger.info(f"무료 결제 확인 완료: {body.order_id} → {report_token} (총 {time.perf_counter() - t0:.2f}s)")
 

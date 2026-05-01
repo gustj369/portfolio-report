@@ -4,10 +4,11 @@
 - 미설정 시: 인메모리 dict fallback (개발 환경)
 
 사용법:
-    from services.storage import storage_set, storage_get, storage_delete
+    from services.storage import storage_set, storage_get, storage_delete, storage_exists
     storage_set("key", {"foo": "bar"}, ttl=3600)
-    data = storage_get("key")   # dict 또는 None
+    data = storage_get("key")      # dict 또는 None
     storage_delete("key")
+    exists = storage_exists("key") # bool
 """
 import json
 import logging

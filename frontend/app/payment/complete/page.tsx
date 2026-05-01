@@ -100,6 +100,7 @@ function CompletePageContent() {
           setLocalReportToken(token);
           setReportToken(token);
           sessionStorage.setItem(`rpt_${orderId}`, token);
+          if (isCancelled) return; // 상태 설정 후 언마운트 방어
         } else {
           // 유료 플로우: Toss 결제 승인
           if (!paymentKey) {
@@ -245,9 +246,18 @@ function CompletePageContent() {
             {isDownloading ? "다운로드 중..." : "📥 PDF 다운로드"}
           </button>
 
-          {/* 다운로드 실패 인라인 메시지 */}
+          {/* 다운로드 실패 인라인 메시지 + 재시도 버튼 */}
           {downloadError && (
-            <p className="text-sm text-red-500 mb-3">{downloadError}</p>
+            <div className="mb-3">
+              <p className="text-sm text-red-500 mb-2">{downloadError}</p>
+              <button
+                onClick={handleDownload}
+                disabled={isDownloading}
+                className="text-sm text-navy underline hover:no-underline disabled:opacity-50"
+              >
+                다시 시도
+              </button>
+            </div>
           )}
 
           {state.userProfile.email && (
