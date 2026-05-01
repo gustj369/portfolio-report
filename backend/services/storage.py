@@ -84,8 +84,10 @@ def storage_set(key: str, value: Any, ttl: int = 86400 * 7) -> None:
             logger.warning(f"Redis set 실패 — 캐시 무효화 후 인메모리 fallback 사용: {e}")
             _reset_redis_cache()
             _local[key] = serialized
+            logger.debug(f"인메모리 fallback 저장 완료 (Redis 장애 후): key={key!r}")
     else:
         _local[key] = serialized
+        logger.debug(f"인메모리 저장 완료 (Redis 미설정): key={key!r}")
 
 
 def storage_get(key: str) -> Optional[Any]:

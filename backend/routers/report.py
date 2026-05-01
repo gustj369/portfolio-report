@@ -87,6 +87,9 @@ async def generate_report(
     payment = get_confirmed_payment(body.report_token)
     if not payment:
         # report_token TTL(7일) 만료 또는 미결제 — 스토리지 TTL 삭제로 두 경우 구분 불가
+        logger.warning(
+            f"[{body.report_token}] 결제 정보 없음 → 403 반환 (만료 또는 미결제 토큰)"
+        )
         raise HTTPException(
             status_code=403,
             detail="결제 정보를 찾을 수 없습니다. 결제 후 7일이 경과했거나 유효하지 않은 요청입니다.",
@@ -225,7 +228,8 @@ async def _generate_report_background(
 ):
     """백그라운드 PDF 생성 태스크 (record는 호출부에서 직접 전달)"""
     try:
-        t0 = time.perf_counter()  # 전체 소요시간 측정 기준점
+        t0 = time.perf_counter()
+        logger.info(f"[{report_token}] 백그라운드 PDF 생성 태스크 시작 ({time.perf_counter() - t0:.2f}s)")
 
         # 상태 업데이트: GENERATING
         record.status = ReportStatus.GENERATING

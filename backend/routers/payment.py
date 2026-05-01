@@ -67,16 +67,21 @@ async def request_payment(
     order_id = f"order_{uuid.uuid4().hex[:16]}"
     logger.info(f"결제 요청 초기화: {order_id} ({time.perf_counter() - t0:.2f}s)")
 
-    storage_set(
-        f"{_PENDING_PFX}{order_id}",
-        {
-            "status": "pending",
-            "amount": settings.report_price_krw,
-            "analyze_request": body.analyze_request.model_dump(mode="json"),
-            "created_at": datetime.now().isoformat(),
-        },
-        ttl=3600,  # 1시간 후 자동 만료
-    )
+    try:
+        storage_set(
+            f"{_PENDING_PFX}{order_id}",
+            {
+                "status": "pending",
+                "amount": settings.report_price_krw,
+                "analyze_request": body.analyze_request.model_dump(mode="json"),
+                "created_at": datetime.now().isoformat(),
+            },
+            ttl=3600,  # 1시간 후 자동 만료
+        )
+    except Exception as save_err:
+        # 저장 실패 시 /confirm 단계에서 pending 없음 → 404 발생.
+        # order_id는 반환해 프론트가 결제창을 열 수 있도록 하되, 경고 로그를 남김.
+        logger.warning(f"결제 요청 pending 저장 실패: {order_id} — {save_err} ({time.perf_counter() - t0:.2f}s)")
 
     logger.info(f"결제 요청 생성: {order_id} ({time.perf_counter() - t0:.2f}s)")
 

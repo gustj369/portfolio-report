@@ -199,10 +199,11 @@ function CompletePageContent() {
             const resolvedUrl = status.download_url.startsWith("/")
               ? `${API_URL}${status.download_url}`
               : status.download_url;
+            sessionStorage.removeItem(`rpt_${orderId}`);
+            if (isCancelled) return; // 언마운트 후 상태 업데이트 방어
             setDownloadUrl(resolvedUrl);
             setPhase("done");
             setCurrentStep(5);
-            sessionStorage.removeItem(`rpt_${orderId}`);
           } else if (status.status === "error") {
             sessionStorage.removeItem(`rpt_${orderId}`);
             if (isCancelled) return; // 언마운트 후 상태 업데이트 방어
