@@ -18,9 +18,16 @@ logger = logging.getLogger(__name__)
 # 인메모리 fallback (Redis 없을 때)
 _local: dict[str, str] = {}
 
+# Redis 클라이언트 캐시 — 최초 ping 성공 후 재사용 (매 호출 신규 연결·ping 방지)
+# ping 실패 시 None 유지 → 다음 호출에서 재시도 / 각 operation의 try-except가 장애 처리
+_redis_client_cache: Any = None
+
 
 def _get_redis():
-    """Redis 클라이언트 반환. 설정 없거나 연결 실패 시 None."""
+    """Redis 클라이언트 반환. 캐시된 클라이언트 재사용. 설정 없거나 연결 실패 시 None."""
+    global _redis_client_cache
+    if _redis_client_cache is not None:
+        return _redis_client_cache
     try:
         from config import get_settings
         settings = get_settings()
@@ -33,8 +40,9 @@ def _get_redis():
             socket_connect_timeout=5,
             socket_timeout=5,
         )
-        client.ping()  # 연결 확인
-        return client
+        client.ping()  # 최초 연결 확인
+        _redis_client_cache = client
+        return _redis_client_cache
     except ImportError:
         logger.warning("redis 패키지 미설치 — 인메모리 fallback 사용")
         return None
@@ -94,5 +102,9 @@ def storage_exists(key: str) -> bool:
     """키 존재 여부 확인."""
     r = _get_redis()
     if r:
-        return bool(r.exists(key))
+        try:
+            return bool(r.exists(key))
+        except Exception as e:
+            logger.warning(f"Redis exists 실패 — 인메모리 fallback 사용: {e}")
+            return key in _local
     return key in _local

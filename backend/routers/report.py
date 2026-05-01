@@ -217,6 +217,14 @@ async def _generate_report_background(
         # 상태 업데이트: GENERATING
         record.status = ReportStatus.GENERATING
         _save_record(record)
+        # 저장 검증: Redis↔인메모리 불일치 시 폴링이 PENDING을 반환할 수 있음을 조기 감지
+        _saved = _load_record(report_token)
+        if not _saved or _saved.status != ReportStatus.GENERATING:
+            logger.warning(
+                f"[{report_token}] GENERATING 상태 저장 확인 실패 "
+                f"(읽힌 상태: {_saved.status.value if _saved else 'None'}) "
+                f"— 폴링이 PENDING으로 응답할 수 있음"
+            )
 
         # AnalyzeRequest 복원
         analyze_req = AnalyzeRequest.model_validate(payment["analyze_request"])
