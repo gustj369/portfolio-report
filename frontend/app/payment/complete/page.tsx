@@ -162,6 +162,7 @@ function CompletePageContent() {
           if (isCancelled) return; // 언마운트 후 실행 중단
           if (attempts >= maxAttempts) {
             sessionStorage.removeItem(`rpt_${orderId}`);
+            if (isCancelled) return; // 언마운트 후 상태 업데이트 방어
             setErrorCode("timeout");
             setPhase("error");
             setErrorMsg("리포트 생성 시간이 초과되었습니다. 고객센터에 문의해주세요.");

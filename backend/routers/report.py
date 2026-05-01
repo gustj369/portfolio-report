@@ -242,7 +242,8 @@ async def _generate_report_background(
             logger.warning(
                 f"[{report_token}] GENERATING 상태 저장 확인 실패 "
                 f"(읽힌 상태: {_saved.status.value if _saved else 'None'}) "
-                f"— 폴링이 PENDING으로 응답할 수 있음. storage 로그를 확인해주세요."
+                f"— 폴링이 PENDING으로 응답할 수 있음. storage 로그를 확인해주세요. "
+                f"({time.perf_counter() - t0:.2f}s)"
             )
 
         # AnalyzeRequest 복원
@@ -430,6 +431,7 @@ async def serve_local_file(filename: str):
         raise HTTPException(status_code=400, detail="잘못된 파일명입니다.")
     filepath = os.path.join(LOCAL_REPORTS_DIR, filename)
     if not os.path.exists(filepath):
+        logger.info(f"로컬 PDF 파일 없음 → 404 반환: {filename!r}")
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
     return FileResponse(
         path=filepath,

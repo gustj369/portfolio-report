@@ -120,8 +120,10 @@ def storage_delete(key: str) -> None:
             logger.warning(f"Redis delete 실패 — 캐시 무효화 후 인메모리에서만 삭제: {e}")
             _reset_redis_cache()
             _local.pop(key, None)
+            logger.debug(f"인메모리 fallback 삭제 완료 (Redis 장애 후): key={key!r}")
     else:
         _local.pop(key, None)
+        logger.debug(f"인메모리 삭제 완료 (Redis 미설정): key={key!r}")
 
 
 def storage_exists(key: str) -> bool:

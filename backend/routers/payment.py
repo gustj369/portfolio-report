@@ -120,6 +120,11 @@ async def confirm_payment(
         )
 
     if pending["amount"] != body.amount:
+        logger.warning(
+            f"결제 금액 불일치: {body.order_id} "
+            f"(pending={pending['amount']}, request={body.amount}) "
+            f"({time.perf_counter() - t0:.2f}s)"
+        )
         raise HTTPException(status_code=400, detail="결제 금액이 일치하지 않습니다.")
 
     logger.info(f"결제 pending 확인 완료: {body.order_id} (amount={body.amount}) ({time.perf_counter() - t0:.2f}s)")
