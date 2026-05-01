@@ -92,6 +92,7 @@ async def generate_report(
     # 이미 생성 중/완료인 경우 — GENERATING/READY만 차단, ERROR/PENDING은 재시도 허용
     existing = _load_record(body.report_token)
     if existing and existing.status in (ReportStatus.GENERATING, ReportStatus.READY):
+        logger.info(f"[{body.report_token}] {existing.status.value} 상태 — 중복 생성 건너뜀")
         return GenerateReportResponse(
             report_token=body.report_token,
             status=existing.status.value,

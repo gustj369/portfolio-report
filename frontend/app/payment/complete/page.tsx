@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useInput } from "@/context/InputContext";
@@ -25,7 +25,6 @@ const STATUS_STEPS = [
 ];
 
 function CompletePageContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { state, setReportToken } = useInput();
 
@@ -73,6 +72,9 @@ function CompletePageContent() {
       setErrorMsg("결제 정보가 올바르지 않습니다.");
       return;
     }
+
+    // 언마운트 후 poll 상태 업데이트 방지
+    let isCancelled = false;
 
     (async () => {
       try {
@@ -149,6 +151,7 @@ function CompletePageContent() {
         const maxAttempts = 60; // 최대 3분
 
         const poll = async () => {
+          if (isCancelled) return; // 언마운트 후 실행 중단
           if (attempts >= maxAttempts) {
             sessionStorage.removeItem(`rpt_${orderId}`);
             setErrorCode("timeout");
@@ -210,6 +213,8 @@ function CompletePageContent() {
         setErrorMsg(e instanceof Error ? e.message : "처리 중 오류가 발생했습니다.");
       }
     })();
+
+    return () => { isCancelled = true; }; // 언마운트 시 poll 루프 중단
   // setReportToken 을 deps에 추가하면 InputContext spread 업데이트로 매 렌더마다
   // 새 참조가 생성되어 effect 재실행 무한 루프 발생 → 의도적으로 제외
   // eslint-disable-next-line react-hooks/exhaustive-deps
