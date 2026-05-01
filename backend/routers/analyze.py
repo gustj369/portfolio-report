@@ -62,8 +62,7 @@ async def analyze_portfolio(
                     market_snapshot,
                     settings.gemini_api_key,
                 )
-                t3 = time.perf_counter()
-                logger.info(f"AI 분석 완료 ({t3 - t2:.2f}s)")
+                logger.info(f"AI 분석 완료 ({time.perf_counter() - t2:.2f}s)")
             except Exception as e:
                 logger.warning(f"AI 분석 실패 — fallback 사용 ({time.perf_counter() - t2:.2f}s): {e}")
         else:

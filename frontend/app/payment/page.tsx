@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import Script from "next/script";
 import { useInput } from "@/context/InputContext";
 import { requestPayment, freeConfirmPayment } from "@/lib/api";
 
@@ -99,6 +100,7 @@ export default function PaymentPage() {
 
   return (
     <>
+      <Script src="https://js.tosspayments.com/v1/payment" strategy="lazyOnload" />
       <div className="min-h-screen bg-gray-50 py-8 px-4 flex items-center justify-center">
         <div className="w-full max-w-md">
           <div className="card">
