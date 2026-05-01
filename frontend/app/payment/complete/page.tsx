@@ -142,6 +142,7 @@ function CompletePageContent() {
             setIsRetrying(true);
             await new Promise(r => setTimeout(r, 2000));
             setIsRetrying(false);
+            if (isCancelled) return; // 2초 대기 중 언마운트 방어 — 재시도 불필요
             await generateReport(token);
           });
         } catch (e) {

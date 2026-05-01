@@ -94,11 +94,16 @@ def storage_get(key: str) -> Optional[Any]:
     """키로 값 조회. 없으면 None."""
     r = _get_redis()
     try:
-        raw = r.get(key) if r else _local.get(key)
+        if r:
+            raw = r.get(key)
+        else:
+            raw = _local.get(key)
+            logger.debug(f"인메모리 get 완료 (Redis 미설정): key={key!r}")
     except Exception as e:
         logger.warning(f"Redis get 실패 — 캐시 무효화 후 인메모리 fallback 사용: {e}")
         _reset_redis_cache()
         raw = _local.get(key)
+        logger.debug(f"인메모리 fallback get 완료 (Redis 장애 후): key={key!r}")
     if raw is None:
         return None
     try:

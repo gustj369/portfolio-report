@@ -242,7 +242,7 @@ async def free_confirm(body: FreeConfirmInput) -> PaymentConfirmResponse:
         {"report_token": report_token},
         ttl=86400 * 7,
     )
-    logger.info(f"무료 결제 토큰 저장 완료: {body.order_id} → {report_token} ({time.perf_counter() - t0:.2f}s)")
+    logger.info(f"무료 결제 스토리지 저장 완료: {body.order_id} → {report_token} ({time.perf_counter() - t0:.2f}s)")
 
     logger.info(f"무료 결제 확인 완료: {body.order_id} → {report_token} (총 {time.perf_counter() - t0:.2f}s)")
 

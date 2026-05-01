@@ -98,14 +98,20 @@ async def generate_report(
     # 이미 생성 중/완료인 경우 — GENERATING/READY만 차단, ERROR/PENDING은 재시도 허용
     existing = _load_record(body.report_token)
     if existing and existing.status in (ReportStatus.GENERATING, ReportStatus.READY):
-        logger.info(f"[{body.report_token}] {existing.status.value} 상태 — 중복 생성 건너뜀")
+        logger.info(
+            f"[{body.report_token}] {existing.status.value} 상태 — 중복 생성 건너뜀 "
+            f"({time.perf_counter() - t0:.2f}s)"
+        )
         return GenerateReportResponse(
             report_token=body.report_token,
             status=existing.status.value,
             message="이미 처리 중이거나 완료된 요청입니다.",
         )
     if existing and existing.status == ReportStatus.ERROR:
-        logger.info(f"[{body.report_token}] 이전 실패({existing.error_message}) → 재생성 시작")
+        logger.info(
+            f"[{body.report_token}] 이전 실패({existing.error_message}) → 재생성 시작 "
+            f"({time.perf_counter() - t0:.2f}s)"
+        )
 
     # PENDING 중복 생성 방지: 5분 이내 PENDING 재요청은 건너뜀
     # 배경 태스크 첫 줄에서 즉시 GENERATING으로 전환하므로 PENDING 체류는 수초 이내가 정상.
@@ -325,6 +331,7 @@ async def _generate_report_background(
         record.download_url = download_url
         record.completed_at = datetime.now(KST)
         _save_record(record)
+        logger.info(f"[{report_token}] READY 상태 저장 완료 ({time.perf_counter()-t0:.2f}s 누적)")
         logger.info(f"[{report_token}] 리포트 생성 완료 (총 {time.perf_counter()-t0:.2f}s): {download_url}")
 
         # 8. 이메일 발송 (SMTP 설정 + 사용자 이메일 있는 경우)
