@@ -145,7 +145,7 @@ export default function PaymentPage() {
               disabled={isLoading || !orderId || clientKey === ""}
               className="w-full py-4 bg-gold-500 text-white font-bold text-lg rounded-xl hover:bg-gold-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
             >
-              {isLoading ? "처리 중..." : isFree ? "무료로 받기" : `${amount.toLocaleString()}원 결제하기`}
+              {isLoading ? "처리 중..." : (!orderId || clientKey === "") ? "초기화 중..." : isFree ? "무료로 받기" : `${amount.toLocaleString()}원 결제하기`}
             </button>
 
             <div className="text-center mt-4">

@@ -256,6 +256,7 @@ async def _generate_report_background(
                 risk_score,
                 risk_grade,
             )
+            logger.info(f"[{report_token}] Gemini 미설정 — fallback 분석 사용 ({time.perf_counter()-t_ai:.2f}s)")
         logger.info(f"[{report_token}] AI 분석 완료 ({time.perf_counter()-t_ai:.2f}s)")
 
         # 4. 차트 생성 — 개별 실패 시 None 반환 (PDF는 해당 차트 없이 계속 생성)

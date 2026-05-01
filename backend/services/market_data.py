@@ -80,6 +80,7 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
             if not hist.empty:
                 close_data = hist["Close"].dropna()
                 if close_data.empty:
+                    logger.warning(f"시장 데이터 Close 컬럼 비어있음 ({ticker}) — 건너뜀")
                     continue
                 price = float(close_data.iloc[-1])
                 if key == "sp500":
@@ -104,6 +105,8 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                     # 환율: 합리적 범위 체크 (800~2000)
                     if 800 <= price <= 2000:
                         data["usd_krw"] = price
+            else:
+                logger.warning(f"시장 데이터 빈 응답 ({ticker}) — 건너뜀")
         except Exception as e:
             logger.warning(f"시장 데이터 수집 실패 ({ticker}): {e}")
 
