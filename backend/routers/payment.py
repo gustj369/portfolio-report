@@ -54,7 +54,7 @@ class PaymentConfirmResponse(BaseModel):
 
 class PaymentStatusResponse(BaseModel):
     order_id: str
-    status: str  # pending / unknown (confirmed 이후엔 report_token 기준으로 관리되므로 order_id로 조회 불가)
+    status: str  # pending / confirmed / unknown
 
 
 @router.post("/request", response_model=PaymentRequestResponse)
@@ -239,8 +239,11 @@ async def get_payment_status(order_id: str) -> PaymentStatusResponse:
     if storage_get(f"{_PENDING_PFX}{order_id}"):
         return PaymentStatusResponse(order_id=order_id, status="pending")
 
-    # confirmed 상태는 report_token 기준으로 저장되므로 order_id로 역조회 불가
-    # pending이 없으면 만료·미존재·승인완료 중 구분할 수 없어 unknown 반환
+    # 멱등성 키는 confirm 완료 시 저장되어 7일 보존 → confirmed 판별에 활용
+    if storage_get(f"{_IDEMPOTENCY_PFX}{order_id}"):
+        return PaymentStatusResponse(order_id=order_id, status="confirmed")
+
+    # pending·confirmed 모두 없으면 만료 또는 미존재
     return PaymentStatusResponse(order_id=order_id, status="unknown")
 
 

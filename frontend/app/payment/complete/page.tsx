@@ -171,7 +171,13 @@ function CompletePageContent() {
               setErrorMsg("리포트가 만료되었습니다. (리포트는 7일간 보관됩니다)");
               return;
             }
-            throw e; // 그 외 네트워크 오류는 외부 catch로 전달
+            // 그 외 네트워크 오류: poll은 setTimeout 콜백이므로 외부 try-catch에 걸리지 않음
+            // → unhandled rejection 방지를 위해 직접 처리
+            sessionStorage.removeItem(`rpt_${orderId}`);
+            setErrorCode("network");
+            setPhase("error");
+            setErrorMsg(e instanceof Error ? e.message : "네트워크 오류가 발생했습니다.");
+            return;
           }
           setReportStatus(status.status);
 
@@ -204,6 +210,9 @@ function CompletePageContent() {
         setErrorMsg(e instanceof Error ? e.message : "처리 중 오류가 발생했습니다.");
       }
     })();
+  // setReportToken 을 deps에 추가하면 InputContext spread 업데이트로 매 렌더마다
+  // 새 참조가 생성되어 effect 재실행 무한 루프 발생 → 의도적으로 제외
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   if (phase === "done" && downloadUrl) {
