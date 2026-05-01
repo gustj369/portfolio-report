@@ -25,6 +25,7 @@ export default function PaymentPage() {
   const [clientKey, setClientKey] = useState("");
   const [isFree, setIsFree] = useState(false);
   const [error, setError] = useState("");
+  const [tossReady, setTossReady] = useState(false);
 
   useEffect(() => {
     if (!previewResponse) {
@@ -100,7 +101,7 @@ export default function PaymentPage() {
 
   return (
     <>
-      <Script src="https://js.tosspayments.com/v1/payment" strategy="lazyOnload" />
+      <Script src="https://js.tosspayments.com/v1/payment" strategy="lazyOnload" onLoad={() => setTossReady(true)} />
       <div className="min-h-screen bg-gray-50 py-8 px-4 flex items-center justify-center">
         <div className="w-full max-w-md">
           <div className="card">
@@ -156,10 +157,10 @@ export default function PaymentPage() {
 
             <button
               onClick={handlePayment}
-              disabled={isLoading || !orderId || clientKey === ""}
+              disabled={isLoading || !orderId || clientKey === "" || (isRealTossKey && !tossReady)}
               className="w-full py-4 bg-gold-500 text-white font-bold text-lg rounded-xl hover:bg-gold-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
             >
-              {isLoading ? "처리 중..." : (!orderId || clientKey === "") ? "초기화 중..." : isFree ? "무료로 받기" : `${amount.toLocaleString()}원 결제하기`}
+              {isLoading ? "처리 중..." : (!orderId || clientKey === "" || (isRealTossKey && !tossReady)) ? "초기화 중..." : isFree ? "무료로 받기" : `${amount.toLocaleString()}원 결제하기`}
             </button>
 
             <div className="text-center mt-4">
