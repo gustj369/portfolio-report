@@ -89,7 +89,8 @@ export default function PaymentPage() {
         );
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "결제 처리 중 오류가 발생했습니다.");
+      const msg = e instanceof Error ? e.message : "처리 중 오류가 발생했습니다.";
+      setError(isFree ? `리포트 발급에 실패했습니다. ${msg}` : `결제 처리 중 오류가 발생했습니다. ${msg}`);
       setIsLoading(false);
     }
   };
@@ -110,7 +111,7 @@ export default function PaymentPage() {
               <div className="mt-3 pt-3 border-t border-blue-700 flex justify-between items-center">
                 <span className="text-blue-200 text-sm">결제 금액</span>
                 <span className="text-gold-400 text-2xl font-bold">
-                  {amount.toLocaleString()}원
+                  {isFree ? "무료" : `${amount.toLocaleString()}원`}
                 </span>
               </div>
             </div>
