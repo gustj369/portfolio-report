@@ -106,8 +106,8 @@ async def confirm_payment(
     if pending["amount"] != body.amount:
         raise HTTPException(status_code=400, detail="결제 금액이 일치하지 않습니다.")
 
-    # 토스페이먼츠 서버 결제 승인 호출
-    if settings.toss_secret_key:
+    # 토스페이먼츠 서버 결제 승인 호출 (무료(0원) 결제는 Toss 호출 불필요)
+    if settings.toss_secret_key and body.amount > 0:
         try:
             auth_str = base64.b64encode(f"{settings.toss_secret_key}:".encode()).decode()
             async with httpx.AsyncClient(timeout=30) as client:

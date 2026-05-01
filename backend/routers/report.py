@@ -292,7 +292,9 @@ async def _generate_report_background(
         logger.info(f"[{report_token}] PDF 생성 완료 ({time.perf_counter()-t_pdf:.2f}s)")
 
         # 6. 저장 (로컬 / AWS S3 / Cloudflare R2)
+        t_save = time.perf_counter()
         download_url = await _save_report(report_token, pdf_bytes, settings)
+        logger.info(f"[{report_token}] 저장 완료 ({time.perf_counter()-t_save:.2f}s)")
 
         # 7. 완료 처리
         record.status = ReportStatus.READY

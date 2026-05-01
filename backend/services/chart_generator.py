@@ -180,6 +180,12 @@ def generate_stacked_bar_chart(
         max(0, base_values_at_years[i] - total_invested_at_years[i])
         for i in range(5)
     ]
+    # 손실 구간: 투자원금 > 기본 시나리오 실제값인 경우
+    loss_at_years = [
+        max(0, total_invested_at_years[i] - base_values_at_years[i])
+        for i in range(5)
+    ]
+    has_loss = any(l > 0 for l in loss_at_years)
 
     fig, ax = plt.subplots(figsize=(8, 5), facecolor=WHITE)
     ax.set_facecolor(WHITE)
@@ -190,6 +196,13 @@ def generate_stacked_bar_chart(
     bars1 = ax.bar(x, total_invested_at_years, width, label="투자 원금", color=NAVY, alpha=0.85)
     bars2 = ax.bar(x, returns_at_years, width, bottom=total_invested_at_years,
                    label="기대 수익", color=GOLD, alpha=0.85)
+
+    # 손실 구간 overlay: 원금 상단에서 아래로 loss만큼 RED hatch로 강조
+    if has_loss:
+        loss_bottoms = [base_values_at_years[i] if loss_at_years[i] > 0 else total_invested_at_years[i]
+                        for i in range(5)]
+        ax.bar(x, loss_at_years, width, bottom=loss_bottoms,
+               color=RED, alpha=0.25, hatch="///", label="손실 구간", edgecolor=RED, linewidth=0.5)
 
     ax.set_xlabel("투자 기간", fontsize=11, color=NAVY)
     ax.set_ylabel("자산 규모 (만원)", fontsize=11, color=NAVY)
