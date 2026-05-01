@@ -95,6 +95,7 @@ async def confirm_payment(
 ) -> PaymentConfirmResponse:
     """토스페이먼츠 결제 승인 처리"""
     t0 = time.perf_counter()
+    logger.info(f"결제 승인 요청: {body.order_id} ({time.perf_counter() - t0:.2f}s)")
 
     # 대기 중인 결제 확인
     pending = storage_get(f"{_PENDING_PFX}{body.order_id}")
@@ -115,6 +116,8 @@ async def confirm_payment(
 
     if pending["amount"] != body.amount:
         raise HTTPException(status_code=400, detail="결제 금액이 일치하지 않습니다.")
+
+    logger.info(f"결제 pending 확인 완료: {body.order_id} (amount={body.amount}) ({time.perf_counter() - t0:.2f}s)")
 
     # 토스페이먼츠 서버 결제 승인 호출 (무료(0원) 결제는 Toss 호출 불필요)
     if settings.toss_secret_key and body.amount > 0:

@@ -205,6 +205,7 @@ function CompletePageContent() {
             sessionStorage.removeItem(`rpt_${orderId}`);
           } else if (status.status === "error") {
             sessionStorage.removeItem(`rpt_${orderId}`);
+            if (isCancelled) return; // 언마운트 후 상태 업데이트 방어
             setErrorCode("server");
             setPhase("error");
             setErrorMsg(status.error_message || "리포트 생성 중 오류가 발생했습니다.");

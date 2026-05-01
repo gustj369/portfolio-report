@@ -101,7 +101,10 @@ def storage_get(key: str) -> Optional[Any]:
         return None
     try:
         return json.loads(raw)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        # 스토리지에 손상된 값이 저장된 경우 — key와 raw 앞부분을 로그에 포함해 디버깅 용이하게 함
+        preview = raw[:100] if isinstance(raw, str) else repr(raw)[:100]
+        logger.warning(f"JSON 역직렬화 실패 (key={key!r}): {e} | raw 앞 100자: {preview!r}")
         return None
 
 

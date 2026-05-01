@@ -80,6 +80,9 @@ async def generate_report(
     PDF 리포트 생성 시작 (백그라운드 태스크)
     결제 확인 후 전체 분석 + PDF 생성 비동기 처리
     """
+    t0 = time.perf_counter()
+    logger.info(f"[{body.report_token}] 리포트 생성 요청 수신 ({time.perf_counter() - t0:.2f}s)")
+
     # 결제 확인
     payment = get_confirmed_payment(body.report_token)
     if not payment:
@@ -161,6 +164,8 @@ async def get_report_status(report_token: str) -> ReportStatusResponse:
     """리포트 생성 상태 조회"""
     record = _load_record(report_token)
     if not record:
+        # 만료(7일 TTL 경과) 또는 잘못된 토큰 — 프론트엔드가 "expired" 오류로 분기함
+        logger.info(f"[{report_token}] 리포트 레코드 없음 → 404 반환 (만료 또는 잘못된 토큰)")
         raise HTTPException(status_code=404, detail="리포트를 찾을 수 없습니다.")
 
     return ReportStatusResponse(
