@@ -115,6 +115,7 @@ export default function PaymentPage() {
 
     setIsLoading(true);
     setError("");
+    setTossRetryCount(0);
 
     try {
       if (isFree) {
@@ -157,12 +158,13 @@ export default function PaymentPage() {
   if (!previewResponse) return null;
 
   const canRetryPage = !orderId || tossRetryCount > 0;
-  const tossTroubleshootingItems =
-    typeof navigator !== "undefined" && !navigator.onLine
+  const tossTroubleshootingItems = tossRetryCount > 0
+    ? typeof navigator !== "undefined" && !navigator.onLine
       ? ["인터넷 연결이 온라인 상태인지 확인", "연결 복구 후 결제 모듈 다시 불러오기"]
       : tossRetryCount >= 2
       ? ["광고 차단 또는 보안 확장 프로그램 잠시 끄기", "회사/학교/공용 네트워크의 CDN 차단 여부 확인", "다른 브라우저나 다른 네트워크에서 다시 시도"]
-      : ["잠시 후 결제 모듈 다시 불러오기", "계속 실패하면 네트워크 상태 확인"];
+      : ["잠시 후 결제 모듈 다시 불러오기", "계속 실패하면 네트워크 상태 확인"]
+    : [];
 
   return (
     <>
