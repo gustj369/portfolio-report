@@ -78,6 +78,7 @@ async def request_payment(
             },
             ttl=3600,  # 1시간 후 자동 만료
         )
+        logger.info(f"결제 요청 pending 저장 완료: {order_id} ({time.perf_counter() - t0:.2f}s)")
     except Exception as save_err:
         # 저장 실패 시 /confirm 단계에서 pending 없음 → 404 발생.
         # order_id는 반환해 프론트가 결제창을 열 수 있도록 하되, 경고 로그를 남김.

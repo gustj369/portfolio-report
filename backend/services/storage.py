@@ -60,7 +60,7 @@ def _get_redis():
         _redis_client_cache = client
         return _redis_client_cache
     except ImportError:
-        logger.warning("redis 패키지 미설치 — 인메모리 fallback 사용")
+        logger.warning("redis 패키지 미설치 — 인메모리 fallback 사용 (설치: pip install redis)")
         _redis_client_cache = None  # 명시적 미캐시: 다음 호출에서 재시도 가능
         return None
     except Exception as e:

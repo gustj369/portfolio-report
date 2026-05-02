@@ -122,16 +122,23 @@ async def generate_report(
             created = existing.created_at
             if created.tzinfo is None:          # naive datetime 안전 처리
                 created = created.replace(tzinfo=KST)
-            if (now - created).total_seconds() < 300:
+            elapsed = int((now - created).total_seconds())
+            if elapsed < 300:
                 # 정상 흐름(새로고침·재시도로 인한 중복) — info 레벨로 기록
                 logger.info(
                     f"[{body.report_token}] PENDING 중복 요청 "
-                    f"({int((now - created).total_seconds())}초 경과) — 건너뜀"
+                    f"({elapsed}초 경과) — 건너뜀 ({time.perf_counter() - t0:.2f}s)"
                 )
                 return GenerateReportResponse(
                     report_token=body.report_token,
                     status=ReportStatus.PENDING.value,
                     message="이미 처리 중이거나 완료된 요청입니다.",
+                )
+            else:
+                # 5분 초과 PENDING → 태스크 유실 가능성 — 재생성 허용
+                logger.warning(
+                    f"[{body.report_token}] PENDING {elapsed}초 초과 — 태스크 유실 의심, 재생성 허용 "
+                    f"({time.perf_counter() - t0:.2f}s)"
                 )
         except Exception:
             pass  # 비교 실패 시 재생성 허용
@@ -160,6 +167,7 @@ async def generate_report(
         payment,
         settings,
     )
+    logger.info(f"[{body.report_token}] 백그라운드 태스크 등록 완료 ({time.perf_counter() - t0:.2f}s)")
 
     return GenerateReportResponse(
         report_token=body.report_token,
@@ -351,15 +359,15 @@ async def _generate_report_background(
                     pdf_bytes=pdf_bytes,
                 )
                 if sent:
-                    logger.info(f"[{report_token}] 이메일 발송 완료: {user_email}")
+                    logger.info(f"[{report_token}] 이메일 발송 완료: {user_email} ({time.perf_counter()-t0:.2f}s 누적)")
                 else:
                     # 발송 실패는 리포트 생성 자체에 영향 없음 — info 레벨로 기록
-                    logger.info(f"[{report_token}] 이메일 발송 실패 (주소: {user_email})")
+                    logger.info(f"[{report_token}] 이메일 발송 실패 (주소: {user_email}) ({time.perf_counter()-t0:.2f}s 누적)")
             except Exception as email_err:
                 # 발송 예외도 치명적 아님 (PDF는 이미 완료) — info 레벨로 기록
-                logger.info(f"[{report_token}] 이메일 발송 예외 (무시): {email_err}")
+                logger.info(f"[{report_token}] 이메일 발송 예외 (무시): {email_err} ({time.perf_counter()-t0:.2f}s 누적)")
         elif user_email:
-            logger.info(f"[{report_token}] SMTP 미설정 — 이메일 발송 건너뜀 (주소: {user_email})")
+            logger.info(f"[{report_token}] SMTP 미설정 — 이메일 발송 건너뜀 (주소: {user_email}) ({time.perf_counter()-t0:.2f}s 누적)")
 
     except Exception as e:
         logger.error(f"[{report_token}] 리포트 생성 실패: {e}", exc_info=True)
