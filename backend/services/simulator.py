@@ -14,6 +14,10 @@ SCENARIOS = {
 INVESTMENT_YEARS = 5
 MONTHS = INVESTMENT_YEARS * 12
 
+# 강세장 연수익률 상한: 암호화폐 등 고변동성 자산 포트폴리오에서 비현실적 수익률 방지
+# 예) base_return=20%(비트코인 다수) × 1.4 = 28% → 25% 상한 적용
+_BULL_RETURN_CAP = 0.25
+
 
 def run_simulation(
     portfolio: Portfolio,
@@ -33,6 +37,8 @@ def run_simulation(
     results = {}
     for scenario_key, (scenario_name, multiplier) in SCENARIOS.items():
         annual_return = base_return * multiplier
+        if scenario_key == "bull":
+            annual_return = min(annual_return, _BULL_RETURN_CAP)
         scenario_result = _simulate_scenario(
             name=scenario_name,
             initial_value=initial_value,

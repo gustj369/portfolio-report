@@ -30,6 +30,30 @@ _local: dict[str, tuple[str, float | None]] = {}
 # ping 실패 시 None 유지 → 다음 호출에서 재시도 / 각 operation의 try-except가 장애 처리
 _redis_client_cache: Any = None
 
+# 인메모리 GC 카운터 — storage_set N회마다 만료 키 일괄 삭제
+_gc_counter: int = 0
+_GC_INTERVAL: int = 100
+
+
+def _gc_local() -> None:
+    """인메모리 스토리지의 만료 키 주기적 일괄 삭제.
+
+    lazy expiry(_local_get_raw)만으로는 접근이 없는 키가 메모리에 남을 수 있으므로,
+    storage_set 호출 _GC_INTERVAL회마다 전체 스캔하여 만료 키를 정리한다.
+    Redis 사용 환경에서는 _local이 비어 있어 사실상 no-op.
+    """
+    global _gc_counter
+    _gc_counter += 1
+    if _gc_counter < _GC_INTERVAL:
+        return
+    _gc_counter = 0
+    now = time.time()
+    expired = [k for k, (_, exp) in list(_local.items()) if exp is not None and now > exp]
+    for k in expired:
+        _local.pop(k, None)
+    if expired:
+        logger.debug(f"인메모리 GC: 만료 키 {len(expired)}개 삭제 (잔여 {len(_local)}개)")
+
 
 def _reset_redis_cache() -> None:
     """Redis operation 실패 시 캐시 무효화 — 다음 호출에서 재연결 시도 (장기 장애 복구 지원)"""
@@ -100,9 +124,11 @@ def storage_set(key: str, value: Any, ttl: int = 86400 * 7) -> None:
         except Exception as e:
             logger.warning(f"Redis set 실패 — 캐시 무효화 후 인메모리 fallback 사용: {e}")
             _reset_redis_cache()
+            _gc_local()  # Redis 장애 후 인메모리 사용 시에도 GC 실행
             _local[key] = (serialized, expire_ts)
             logger.debug(f"인메모리 fallback 저장 완료 (Redis 장애 후): key={key!r}")
     else:
+        _gc_local()  # 인메모리 저장 시 주기적 GC 실행
         _local[key] = (serialized, expire_ts)
         logger.debug(f"인메모리 저장 완료 (Redis 미설정): key={key!r}")
 

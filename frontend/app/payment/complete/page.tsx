@@ -76,6 +76,7 @@ function CompletePageContent() {
 
     // 언마운트 후 poll 상태 업데이트 방지
     let isCancelled = false;
+    let pollTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
     (async () => {
       try {
@@ -211,11 +212,11 @@ function CompletePageContent() {
             setPhase("error");
             setErrorMsg(status.error_message || "리포트 생성 중 오류가 발생했습니다.");
           } else {
-            setTimeout(poll, 3000);
+            pollTimeoutId = setTimeout(poll, 3000);
           }
         };
 
-        setTimeout(poll, 2000);
+        pollTimeoutId = setTimeout(poll, 2000);
       } catch (e) {
         sessionStorage.removeItem(`rpt_${orderId}`);
         if (isCancelled) return; // 언마운트 후 상태 업데이트 방어
@@ -225,7 +226,7 @@ function CompletePageContent() {
       }
     })();
 
-    return () => { isCancelled = true; }; // 언마운트 시 poll 루프 중단
+    return () => { isCancelled = true; if (pollTimeoutId !== null) clearTimeout(pollTimeoutId); }; // 언마운트 시 poll 루프 중단
   // setReportToken 을 deps에 추가하면 InputContext spread 업데이트로 매 렌더마다
   // 새 참조가 생성되어 effect 재실행 무한 루프 발생 → 의도적으로 제외
   // eslint-disable-next-line react-hooks/exhaustive-deps
