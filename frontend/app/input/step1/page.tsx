@@ -55,6 +55,21 @@ export default function Step1Page() {
               />
             </div>
 
+            {/* 이메일 */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                이메일 <span className="text-gray-400">(선택 — 리포트 발송용)</span>
+              </label>
+              <input
+                type="email"
+                className="input-field"
+                placeholder="example@email.com"
+                value={userProfile.email || ""}
+                onChange={(e) => setUserProfile({ email: e.target.value })}
+              />
+              <p className="text-xs text-gray-400 mt-1">입력 시 완성된 리포트를 이메일로도 받아볼 수 있습니다.</p>
+            </div>
+
             {/* 나이 */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">

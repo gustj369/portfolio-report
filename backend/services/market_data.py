@@ -498,7 +498,7 @@ def _adjust_return_for_market(
 def _fetch_historical_stats(ticker: str) -> tuple[float, float]:
     """티커의 과거 5년 연평균 수익률과 변동성 계산"""
     t = yf.Ticker(ticker)
-    end = datetime.now()
+    end = datetime.now(timezone.utc)   # timezone-aware: yfinance 내부 비교 시 TypeError 방지
     start = end - timedelta(days=365 * 5)
     hist = t.history(start=start, end=end, interval="1mo")
 
