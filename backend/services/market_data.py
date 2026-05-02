@@ -387,6 +387,27 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
         f"금:{data['gold_price']:.0f}{_mark(data['gold_price'], 2300.0)}"
     )
 
+    # 핵심 지표 기본값 사용 집계 — 2개 이상 기본값이면 시뮬레이션 결과 신뢰도가 크게 낮아짐
+    _fallback_used = [
+        name for name, val, default in [
+            ("KOSPI", data["kospi"], 2500.0),
+            ("S&P500", data["sp500"], 5000.0),
+            ("USD/KRW", data["usd_krw"], 1350.0),
+            ("금", data["gold_price"], 2300.0),
+        ] if val == default
+    ]
+    if len(_fallback_used) >= 2:
+        logger.error(
+            f"시장 데이터 다수 기본값 사용 중 ({', '.join(_fallback_used)}) — "
+            f"시뮬레이션·리밸런싱 결과가 실제와 크게 다를 수 있습니다. "
+            f"네트워크 상태 및 외부 API(Yahoo Finance, stooq) 접근 가능 여부를 확인하세요."
+        )
+    elif _fallback_used:
+        logger.warning(
+            f"시장 데이터 기본값 사용 중 ({_fallback_used[0]}) — "
+            f"해당 지표 관련 시뮬레이션 결과에 영향이 있을 수 있습니다."
+        )
+
     # FRED API에서 금리/CPI 수집
     if fred_api_key:
         for key, series_id in FRED_SERIES.items():

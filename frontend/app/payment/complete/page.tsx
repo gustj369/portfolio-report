@@ -222,6 +222,7 @@ function CompletePageContent() {
         setTimeout(poll, 2000);
       } catch (e) {
         sessionStorage.removeItem(`rpt_${orderId}`);
+        if (isCancelled) return; // 언마운트 후 상태 업데이트 방어
         setErrorCode("network");
         setPhase("error");
         setErrorMsg(e instanceof Error ? e.message : "처리 중 오류가 발생했습니다.");

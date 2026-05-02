@@ -360,6 +360,10 @@ def _generate_rebalancing(portfolio: Portfolio, g: dict, target: dict, risk_grad
         # 조정 가능한 자산 중 비중이 가장 큰 자산에서 잔차 흡수
         adjustable = [r for r in recs if r["direction"] in ("증가", "감소", "유지")
                       and r.get("recommended_weight", 0) >= 5.0]
+        if not adjustable:
+            # direction·비중 조건을 만족하는 자산이 없는 엣지 케이스 (예: 전체가 "추가" 또는 비중 <5%)
+            # → 비중 > 0인 임의 자산에서 잔차 흡수하여 합계 100% 보장
+            adjustable = [r for r in recs if r.get("recommended_weight", 0) > 0]
         if adjustable:
             largest = max(adjustable, key=lambda r: r["recommended_weight"])
             largest["recommended_weight"] = round(largest["recommended_weight"] + diff, 1)

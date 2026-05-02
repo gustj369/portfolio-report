@@ -54,8 +54,10 @@ export default function PaymentPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [previewResponse, router]);
 
-  // 실제 Toss 키인지 확인 (live_ck_ 또는 test_ck_ 로 시작하는 실제 키)
-  const isRealTossKey = clientKey.startsWith("live_ck_") || clientKey.startsWith("test_ck_D") || clientKey.startsWith("test_ck_O");
+  // Toss 실제 발급 키: "live_ck_" 또는 "test_ck_" 접두사이면서 플레이스홀더("test_ck_dummy")가 아닌 경우
+  // "test_ck_dummy"는 NEXT_PUBLIC_TOSS_CLIENT_KEY 미설정 시 사용하는 개발 전용 fallback 값
+  const isRealTossKey = (clientKey.startsWith("live_ck_") || clientKey.startsWith("test_ck_"))
+    && clientKey !== "test_ck_dummy";
 
   const getTossLoadError = (failedCount: number) => {
     if (typeof navigator !== "undefined" && !navigator.onLine) {

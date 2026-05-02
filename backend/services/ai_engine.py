@@ -202,6 +202,7 @@ def _call_gemini(model: genai.GenerativeModel, prompt: str, label: str = "") -> 
         max_output_tokens=1500,
     )
     _label = f"[{label}] " if label else ""
+    _last_rate_limit_exc: Exception | None = None  # rate limit 마지막 예외 추적 (3회 소진 시 전파용)
 
     for attempt in range(3):
         try:
@@ -216,24 +217,31 @@ def _call_gemini(model: genai.GenerativeModel, prompt: str, label: str = "") -> 
         except Exception as e:
             error_msg = str(e).lower()
             if "429" in error_msg or "quota" in error_msg:
-                # Rate limit — 지수 백오프
+                # Rate limit — 지수 백오프 후 재시도
+                _last_rate_limit_exc = e
                 wait = 2 ** attempt * 5
-                logger.warning(f"Gemini rate limit, {wait}초 대기 (시도 {attempt + 1})")
+                logger.warning(f"Gemini {_label}rate limit, {wait}초 대기 (시도 {attempt + 1}/3)")
                 time.sleep(wait)
             elif "deadline" in error_msg or "timeout" in error_msg:
                 # 60초 타임아웃 초과 — 재시도
-                logger.warning(f"Gemini timeout (시도 {attempt + 1}/3), 재시도...")
+                logger.warning(f"Gemini {_label}timeout (시도 {attempt + 1}/3), 재시도...")
                 time.sleep(2)
                 if attempt >= 2:
-                    logger.error("Gemini timeout 최종 실패 (3회 초과)")
+                    logger.error(f"Gemini {_label}timeout 최종 실패 (3회 초과)")
                     raise
             elif attempt < 2:
-                logger.warning(f"Gemini API 오류 (시도 {attempt + 1}): {e}")
+                logger.warning(f"Gemini {_label}API 오류 (시도 {attempt + 1}): {e}")
                 time.sleep(1)
             else:
-                logger.error(f"Gemini API 최종 실패: {e}")
+                logger.error(f"Gemini {_label}API 최종 실패: {e}")
                 raise
 
+    # rate limit 3회 모두 소진 — 조용히 빈 문자열 반환하지 않고 예외 전파
+    # 호출부 처리: generate_full_analysis → 보고서 ERROR 상태
+    #             generate_preview_summary → except 블록의 rule-based fallback 사용
+    if _last_rate_limit_exc is not None:
+        logger.error(f"Gemini {_label}rate limit 3회 소진 — 예외 전파")
+        raise _last_rate_limit_exc
     return ""
 
 

@@ -1,6 +1,7 @@
 """
 분석 API 라우터 — 미리보기용 분석 (결제 전)
 """
+import asyncio
 from fastapi import APIRouter, HTTPException, Depends
 import logging
 import time
@@ -30,9 +31,10 @@ async def analyze_portfolio(
     try:
         t0 = time.perf_counter()
 
-        # 1. 시장 데이터 수집
+        # 1. 시장 데이터 수집 (네트워크 I/O — run_in_executor로 이벤트 루프 블로킹 방지)
         logger.info("시장 데이터 수집 시작")
-        market_snapshot = fetch_market_snapshot(settings.fred_api_key)
+        _loop = asyncio.get_running_loop()
+        market_snapshot = await _loop.run_in_executor(None, fetch_market_snapshot, settings.fred_api_key)
         t1 = time.perf_counter()
         logger.info(f"시장 데이터 수집 완료 ({t1 - t0:.2f}s 누적)")
 
@@ -56,11 +58,10 @@ async def analyze_portfolio(
         if settings.gemini_api_key:
             try:
                 logger.info("AI 분석 시작 (미리보기)")
-                summary, ai_risk_score, ai_risk_grade = generate_preview_summary(
-                    request.user_profile,
-                    request.portfolio,
-                    market_snapshot,
-                    settings.gemini_api_key,
+                summary, ai_risk_score, ai_risk_grade = await _loop.run_in_executor(
+                    None, generate_preview_summary,
+                    request.user_profile, request.portfolio,
+                    market_snapshot, settings.gemini_api_key,
                 )
                 elapsed = time.perf_counter()
                 logger.info(f"AI 분석 완료 ({elapsed - t2:.2f}s 스테이지, {elapsed - t0:.2f}s 누적)")
