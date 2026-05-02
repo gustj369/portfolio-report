@@ -2,7 +2,7 @@
 Gemini API 없이 포트폴리오 데이터 기반으로 개인화된 분석 콘텐츠 생성
 """
 from models.portfolio import Portfolio, UserProfile, AssetType
-from models.report import AIContent, MarketSnapshot, SimulationResult
+from models.report import AIContent, MarketSnapshot, SimulationResult, RebalancingRecommendation
 from services.simulator import calculate_risk_score
 
 
@@ -268,7 +268,7 @@ def generate_personalized_content(
     )
 
 
-def _generate_rebalancing(portfolio: Portfolio, g: dict, target: dict, risk_grade: str) -> list[dict]:
+def _generate_rebalancing(portfolio: Portfolio, g: dict, target: dict, risk_grade: str) -> list[RebalancingRecommendation]:
     """리스크 성향 기반 리밸런싱 추천 생성"""
     equity_w = g["equity"]
     alt_w = g["alt"]
@@ -376,7 +376,8 @@ def _generate_rebalancing(portfolio: Portfolio, g: dict, target: dict, risk_grad
             else:
                 largest["direction"] = "증가"
 
-    return recs
+    # dict 리스트 → RebalancingRecommendation 리스트로 변환 (타입 안전성 + 파싱 실패 조기 감지)
+    return [RebalancingRecommendation(**r) for r in recs]
 
 
 def _equity_reason(direction: str, risk_grade: str, target_equity: float) -> str:

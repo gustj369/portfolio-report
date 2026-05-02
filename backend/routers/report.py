@@ -350,21 +350,28 @@ async def _generate_report_background(
         logger.info(f"[{report_token}] 리포트 생성 완료 (총 {time.perf_counter()-t0:.2f}s): {download_url}")
 
         # 8. 이메일 발송 (SMTP 설정 + 사용자 이메일 있는 경우)
+        # SMTP는 동기 네트워크 I/O → run_in_executor로 이벤트 루프 블로킹 방지
         user_email = analyze_req.user_profile.email
         if user_email and settings.smtp_host and settings.smtp_user and settings.smtp_password:
             try:
                 from services.email_service import send_report_email
                 from_addr = settings.smtp_from or settings.smtp_user
-                sent = send_report_email(
-                    smtp_host=settings.smtp_host,
-                    smtp_port=settings.smtp_port,
-                    smtp_user=settings.smtp_user,
-                    smtp_password=settings.smtp_password,
+                _smtp_host = settings.smtp_host
+                _smtp_port = settings.smtp_port
+                _smtp_user = settings.smtp_user
+                _smtp_password = settings.smtp_password
+                _user_name = analyze_req.user_profile.name
+                _email_fn = lambda: send_report_email(
+                    smtp_host=_smtp_host,
+                    smtp_port=_smtp_port,
+                    smtp_user=_smtp_user,
+                    smtp_password=_smtp_password,
                     from_address=from_addr,
                     to_address=user_email,
-                    user_name=analyze_req.user_profile.name,
+                    user_name=_user_name,
                     pdf_bytes=pdf_bytes,
                 )
+                sent = await loop.run_in_executor(None, _email_fn)
                 if sent:
                     logger.info(f"[{report_token}] 이메일 발송 완료: {user_email} ({time.perf_counter()-t0:.2f}s 누적)")
                 else:

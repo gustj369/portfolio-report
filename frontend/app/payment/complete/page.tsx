@@ -4,10 +4,8 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useInput } from "@/context/InputContext";
-import { confirmPayment, generateReport, getReportStatus } from "@/lib/api";
+import { confirmPayment, generateReport, getReportStatus, getDownloadUrl } from "@/lib/api";
 import type { ReportStatus } from "@/types/portfolio";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 const STATUS_MESSAGES: Record<string, string> = {
   pending: "리포트 생성 준비 중...",
@@ -199,10 +197,8 @@ function CompletePageContent() {
           if (status.status === "generating") setCurrentStep(Math.min(2 + Math.floor(attempts / 5), 4));
 
           if (status.status === "ready" && status.download_url) {
-            // 백엔드가 상대 경로를 반환하는 경우 API_URL 접두어 추가
-            const resolvedUrl = status.download_url.startsWith("/")
-              ? `${API_URL}${status.download_url}`
-              : status.download_url;
+            // getDownloadUrl(token)을 통해 API_URL 접두어 처리 (api.ts에서 일원화)
+            const resolvedUrl = getDownloadUrl(token);
             sessionStorage.removeItem(`rpt_${orderId}`);
             if (isCancelled) return; // 언마운트 후 상태 업데이트 방어
             setDownloadUrl(resolvedUrl);
