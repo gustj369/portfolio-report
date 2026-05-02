@@ -78,3 +78,4 @@ class ReportRecord(BaseModel):
     error_message: Optional[str] = None
     created_at: datetime
     completed_at: Optional[datetime] = None
+    download_count: int = 0  # 다운로드 횟수 추적 (토큰 유출 시 무제한 접근 방지)

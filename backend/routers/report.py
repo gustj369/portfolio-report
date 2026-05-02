@@ -203,6 +203,9 @@ async def get_report_status(report_token: str) -> ReportStatusResponse:
     )
 
 
+_MAX_DOWNLOADS = 10  # 토큰 유출 시 무제한 접근 방지 — 정상 재다운로드(2~3회)보다 충분히 큰 값
+
+
 @router.get("/download/{report_token}")
 async def download_report(report_token: str, settings: Settings = Depends(get_settings)):
     """리포트 다운로드 — R2/S3에서 읽어 직접 스트리밍 (CORS 우회)"""
@@ -214,6 +217,24 @@ async def download_report(report_token: str, settings: Settings = Depends(get_se
     if record.status != ReportStatus.READY:
         logger.info(f"[{report_token}] 다운로드 요청 — 상태 {record.status.value} → 409 반환")
         raise HTTPException(status_code=409, detail="리포트가 아직 준비되지 않았습니다.")
+
+    # 다운로드 횟수 제한: 토큰 유출로 인한 무제한 접근 방지
+    if record.download_count >= _MAX_DOWNLOADS:
+        logger.warning(
+            f"[{report_token}] 다운로드 횟수 초과 ({record.download_count}/{_MAX_DOWNLOADS}) → 429 반환"
+        )
+        raise HTTPException(
+            status_code=429,
+            detail=f"다운로드 횟수({_MAX_DOWNLOADS}회)를 초과했습니다. 문의가 필요하시면 고객센터에 연락해주세요.",
+        )
+
+    # 다운로드 카운트 증가 후 저장 (저장 실패해도 다운로드는 계속 — 최선 노력)
+    record.download_count += 1
+    try:
+        _save_record(record)
+        logger.info(f"[{report_token}] 다운로드 #{record.download_count} 시작")
+    except Exception as cnt_err:
+        logger.warning(f"[{report_token}] 다운로드 카운트 저장 실패 (무시): {cnt_err}")
 
     filename = f"report_{report_token}.pdf"
 

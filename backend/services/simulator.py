@@ -83,9 +83,14 @@ def _simulate_scenario(
     total_invested = initial_value + monthly_contribution * months
     total_return_pct = (final_value - total_invested) / total_invested * 100 if total_invested > 0 else 0
 
-    # CAGR = 실제 포트폴리오 연수익률 (DCA 기여분을 감안한 전체 투자 대비 성장률)
+    # CAGR = 포트폴리오 운용 연수익률 (시뮬레이션에 적용된 실제 수익률)
+    # ※ DCA 구조에서 (final / total_invested)^(1/n) 공식을 쓰면
+    #    후반부 납입금은 투자 기간이 짧음에도 처음부터 투자된 것처럼 취급되어
+    #    실제 운용 수익률이 크게 과소평가됨.
+    #    예) annual_return=10%이라도 60개월 DCA 시 약 5~6%로 왜곡.
+    #    annual_return은 매월 월수익률로 변환해 직접 적용한 값이므로 이를 CAGR로 표시.
     years = months / 12
-    cagr = (final_value / total_invested) ** (1 / years) - 1 if total_invested > 0 else 0
+    cagr = annual_return
 
     return ScenarioResult(
         name=name,
