@@ -349,5 +349,33 @@ def _sample_data():
     return user_profile, portfolio
 
 
+# ─────────────────────────────────────────────
+#  pytest 자동 검증 (python -m pytest 로 실행)
+#  _sample_data()는 네트워크 없이 순수 객체만 생성하므로 mock 불필요
+# ─────────────────────────────────────────────
+
+def test_sample_data_portfolio_weights_sum_to_100():
+    """샘플 포트폴리오 비중 합계가 100이어야 한다"""
+    _, portfolio = _sample_data()
+    total = sum(a.weight for a in portfolio.allocations)
+    assert abs(total - 100.0) < 0.1, f"비중 합계 오류: {total}"
+
+
+def test_sample_data_user_profile_is_valid():
+    """샘플 사용자 프로필 필드가 유효해야 한다"""
+    user_profile, _ = _sample_data()
+    assert user_profile.age > 0
+    assert user_profile.monthly_income > 0
+    assert user_profile.investment_period > 0
+
+
+def test_sample_data_allocations_are_nonempty():
+    """샘플 포트폴리오에 자산이 1개 이상 있어야 한다"""
+    _, portfolio = _sample_data()
+    assert len(portfolio.allocations) >= 1
+    for a in portfolio.allocations:
+        assert a.weight > 0, f"비중 0인 자산 발견: {a.asset_name}"
+
+
 if __name__ == "__main__":
     main()

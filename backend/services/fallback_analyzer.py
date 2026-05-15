@@ -23,6 +23,12 @@ _MID_RATE_YIELD = 3.5           # US 10Y 금리 이상 → 중립 환경 코멘�
 _HIGH_CPI_THRESHOLD = 3.0       # CPI 이상 → 인플레이션 경고 코멘트
 _FX_WEAK_KRW = 1400             # USD/KRW 이상 → 원화 약세 코멘트
 
+# 리밸런싱 추천 비중 클램핑 범위 (_generate_rebalancing 사용)
+_BOND_WEIGHT_MAX = 60.0       # 채권 추천 비중 상한
+_ALT_WEIGHT_MAX = 50.0        # 대안자산 추천 비중 상한
+_EQUITY_WEIGHT_MIN = 5.0      # 주식 추천 비중 하한
+_EQUITY_WEIGHT_MAX = 95.0     # 주식 추천 비중 상한
+
 # 리스크 성향별 목표 자산 배분 (%)
 _TARGET_ALLOC = {
     "안정형": {"equity": 35, "bond": 45, "cash": 20, "alt": 0},
@@ -312,7 +318,7 @@ def _generate_rebalancing(portfolio: Portfolio, g: dict, target: dict, risk_grad
         bond_diff = target_bond - g["bond"]
         per_adj = bond_diff / len(bond_allocs)
         for a in bond_allocs:
-            new_w = round(max(0.0, min(60.0, a.weight + per_adj)), 1)
+            new_w = round(max(0.0, min(_BOND_WEIGHT_MAX, a.weight + per_adj)), 1)
             direction = "증가" if new_w > a.weight + 0.5 else ("감소" if new_w < a.weight - 0.5 else "유지")
             asset_display = a.asset_name if a.asset_name else ("단기채권" if a.asset_type == AssetType.SHORT_BOND else "채권")
             if direction == "증가":
@@ -353,7 +359,7 @@ def _generate_rebalancing(portfolio: Portfolio, g: dict, target: dict, risk_grad
         alt_diff = target_alt - alt_w
         per_adj = alt_diff / len(alt_allocs)
         for a in alt_allocs:
-            new_w = round(max(0.0, min(50.0, a.weight + per_adj)), 1)
+            new_w = round(max(0.0, min(_ALT_WEIGHT_MAX, a.weight + per_adj)), 1)
             direction = "증가" if new_w > a.weight + 0.5 else ("감소" if new_w < a.weight - 0.5 else "유지")
             reason = _alt_reason(direction, a.asset_type, a.asset_name, target_alt, a.weight, new_w)
             recs.append({"asset_name": a.asset_name, "current_weight": a.weight,
@@ -364,7 +370,7 @@ def _generate_rebalancing(portfolio: Portfolio, g: dict, target: dict, risk_grad
         equity_diff = target_equity - equity_w
         per_adj = equity_diff / len(equity_allocs)
         for a in equity_allocs:
-            new_w = round(max(5.0, min(95.0, a.weight + per_adj)), 1)
+            new_w = round(max(_EQUITY_WEIGHT_MIN, min(_EQUITY_WEIGHT_MAX, a.weight + per_adj)), 1)
             direction = "증가" if new_w > a.weight + 0.5 else ("감소" if new_w < a.weight - 0.5 else "유지")
             reason = _equity_reason(direction, risk_grade, target["equity"])
             recs.append({"asset_name": a.asset_name, "current_weight": a.weight,
