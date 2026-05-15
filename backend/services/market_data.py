@@ -89,6 +89,10 @@ _MONTHS_PER_YEAR = 12     # 월간 수익률 → 연환산 인수
 _MIN_HIST_MONTHS = 12     # 유효한 계산을 위한 최소 월 데이터 수
 _HIST_BLEND_RATIO = 0.5   # 역사적 수익률 블렌딩 비율 (0=기본값만, 1=역사적값만)
 
+# BASE_RETURNS / BASE_VOLATILITY에 없는 미등록 자산유형의 fallback 기본값
+_DEFAULT_RETURN = 0.05
+_DEFAULT_VOLATILITY = 0.15
+
 
 def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
     """현재 시장 데이터 스냅샷 수집"""
@@ -495,8 +499,8 @@ def get_asset_return(
     ticker가 있으면 과거 데이터 기반, 없으면 자산유형 기본값 사용
     Returns: (annual_return, annual_volatility)
     """
-    base_return = BASE_RETURNS.get(allocation.asset_type, 0.05)
-    base_vol = BASE_VOLATILITY.get(allocation.asset_type, 0.15)
+    base_return = BASE_RETURNS.get(allocation.asset_type, _DEFAULT_RETURN)
+    base_vol = BASE_VOLATILITY.get(allocation.asset_type, _DEFAULT_VOLATILITY)
 
     # 현재 시장 상황 반영 조정
     adjusted_return = _adjust_return_for_market(base_return, allocation.asset_type, market_snapshot)
