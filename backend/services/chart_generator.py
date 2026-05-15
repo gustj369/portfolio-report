@@ -48,8 +48,8 @@ def _setup_font():
                 plt.rcParams["font.family"] = prop.get_name()
                 logger.info(f"차트 폰트 설정: {font_path}")
                 break
-            except Exception as e:
-                logger.warning(f"폰트 로드 실패 ({font_path}): {e}")
+            except OSError as e:
+                logger.warning(f"폰트 로드 실패 ({font_path}) [{type(e).__name__}]: {e}")
     else:
         # Windows 시스템 폰트명으로 직접 지정 시도
         plt.rcParams["font.family"] = ["Malgun Gothic", "Arial Unicode MS", "DejaVu Sans"]

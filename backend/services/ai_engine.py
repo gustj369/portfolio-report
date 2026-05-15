@@ -3,6 +3,7 @@ Google Gemini API 연동 — 포트폴리오 분석 텍스트 생성
 모델: gemini-1.5-flash (무료 티어: 1,500 req/day)
 """
 import google.generativeai as genai
+import google.api_core.exceptions
 import json
 import logging
 import time
@@ -87,7 +88,8 @@ def generate_preview_summary(
     try:
         data = json.loads(_extract_json(result))
         return data["summary"], int(data["risk_score"]), data["risk_grade"]
-    except Exception:
+    except (ValueError, KeyError, TypeError) as e:
+        logger.warning(f"미리보기 파싱 실패 ({type(e).__name__}): {e}")
         return result[:150], 50, "중립형"
 
 
@@ -214,26 +216,25 @@ def _call_gemini(model: genai.GenerativeModel, prompt: str, label: str = "") -> 
             )
             logger.info(f"Gemini {_label}완료 ({time.perf_counter()-t_start:.2f}s)")
             return response.text
-        except Exception as e:
-            error_msg = str(e).lower()
-            if "429" in error_msg or "quota" in error_msg:
-                # Rate limit — 지수 백오프 후 재시도
+        except google.api_core.exceptions.GoogleAPICallError as e:
+            if isinstance(e, google.api_core.exceptions.ResourceExhausted):
+                # Rate limit (429/quota) — 지수 백오프 후 재시도
                 _last_rate_limit_exc = e
                 wait = 2 ** attempt * 5
-                logger.warning(f"Gemini {_label}rate limit, {wait}초 대기 (시도 {attempt + 1}/3)")
+                logger.warning(f"Gemini {_label}rate limit ({type(e).__name__}), {wait}초 대기 (시도 {attempt + 1}/3)")
                 time.sleep(wait)
-            elif "deadline" in error_msg or "timeout" in error_msg:
+            elif isinstance(e, google.api_core.exceptions.DeadlineExceeded):
                 # 60초 타임아웃 초과 — 재시도
-                logger.warning(f"Gemini {_label}timeout (시도 {attempt + 1}/3), 재시도...")
+                logger.warning(f"Gemini {_label}timeout ({type(e).__name__}) (시도 {attempt + 1}/3), 재시도...")
                 time.sleep(2)
                 if attempt >= 2:
                     logger.error(f"Gemini {_label}timeout 최종 실패 (3회 초과)")
                     raise
             elif attempt < 2:
-                logger.warning(f"Gemini {_label}API 오류 (시도 {attempt + 1}): {e}")
+                logger.warning(f"Gemini {_label}API 오류 ({type(e).__name__}, 시도 {attempt + 1}): {e}")
                 time.sleep(1)
             else:
-                logger.error(f"Gemini {_label}API 최종 실패: {e}")
+                logger.error(f"Gemini {_label}API 최종 실패 ({type(e).__name__}): {e}")
                 raise
 
     # rate limit 3회 모두 소진 — 조용히 빈 문자열 반환하지 않고 예외 전파
@@ -260,18 +261,18 @@ def _parse_ai_results(
 
     try:
         diagnosis = json.loads(_extract_json(diagnosis_raw))
-    except Exception as e:
-        logger.warning(f"진단 파싱 실패: {e}\n원본: {diagnosis_raw[:200]}")
+    except ValueError as e:
+        logger.warning(f"진단 파싱 실패 ({type(e).__name__}): {e}\n원본: {diagnosis_raw[:200]}")
 
     try:
         rebalancing = json.loads(_extract_json(rebalancing_raw))
-    except Exception as e:
-        logger.warning(f"리밸런싱 파싱 실패: {e}\n원본: {rebalancing_raw[:200]}")
+    except ValueError as e:
+        logger.warning(f"리밸런싱 파싱 실패 ({type(e).__name__}): {e}\n원본: {rebalancing_raw[:200]}")
 
     try:
         market = json.loads(_extract_json(market_raw))
-    except Exception as e:
-        logger.warning(f"시장 파싱 실패: {e}\n원본: {market_raw[:200]}")
+    except ValueError as e:
+        logger.warning(f"시장 파싱 실패 ({type(e).__name__}): {e}\n원본: {market_raw[:200]}")
 
     if not rebalancing.get("recommendations"):
         rebalancing["recommendations"] = [
