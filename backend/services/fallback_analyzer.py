@@ -6,6 +6,23 @@ from models.report import AIContent, MarketSnapshot, SimulationResult, Rebalanci
 from services.simulator import calculate_risk_score
 
 
+# 포트폴리오 구성 판단 임계값
+_RISKY_HEAVY_THRESHOLD = 70     # 위험자산 비중 이상 → "성장 중심" 판정
+_RISKY_BALANCED_THRESHOLD = 50  # 위험자산 비중 이상 → "균형형" 판정
+_RISKY_CAUTION_THRESHOLD = 60   # 위험자산 비중 이상 → 강점/주의사항 코멘트 트리거 (2곳 사용)
+_CONCENTRATION_THRESHOLD = 40   # 단일 자산 비중 이상 → 집중 위험 경고
+_CRYPTO_WARNING_THRESHOLD = 20  # 암호화폐 비중 이상 → 고변동성 경고
+_FOREIGN_STOCK_THRESHOLD = 20   # 해외주식 비중 이상 → 환율 리스크 코멘트 (2곳 사용)
+
+# 시장 지표 판단 임계값
+_RETIREMENT_AGE = 60            # 은퇴 나이 기준 (years_to_retire 계산용)
+_MIN_INVEST_YEARS = 10          # 투자 기간 최솟값
+_YOUNG_AGE_THRESHOLD = 40       # "젊은 나이" 강점 코멘트 기준
+_HIGH_RATE_YIELD = 4.5          # US 10Y 금리 이상 → 고금리 환경 코멘트
+_MID_RATE_YIELD = 3.5           # US 10Y 금리 이상 → 중립 환경 코멘트
+_HIGH_CPI_THRESHOLD = 3.0       # CPI 이상 → 인플레이션 경고 코멘트
+_FX_WEAK_KRW = 1400             # USD/KRW 이상 → 원화 약세 코멘트
+
 # 리스크 성향별 목표 자산 배분 (%)
 _TARGET_ALLOC = {
     "안정형": {"equity": 35, "bond": 45, "cash": 20, "alt": 0},
@@ -73,16 +90,16 @@ def generate_personalized_content(
     max_alloc = max(portfolio.allocations, key=lambda a: a.weight)
 
     # ── 종합 진단 ─────────────────────────────────────────────────
-    years_to_retire = max(60 - age, 10)
+    years_to_retire = max(_RETIREMENT_AGE - age, _MIN_INVEST_YEARS)
 
     # 위험자산(주식+대안) 기준으로 포트폴리오 성격 판단
-    if risky_w >= 70:
+    if risky_w >= _RISKY_HEAVY_THRESHOLD:
         dominance = f"위험자산(주식·대안) {risky_w:.0f}%로 성장 중심"
         if risk_grade == "공격형":
             structure_comment = "장기 복리 수익을 극대화할 수 있는 공격적 구조입니다."
         else:
             structure_comment = "장기 복리 성장에 유리한 구조입니다."
-    elif risky_w >= 50:
+    elif risky_w >= _RISKY_BALANCED_THRESHOLD:
         dominance = f"위험자산 {risky_w:.0f}%·안전자산 {100 - risky_w:.0f}%의 균형형"
         structure_comment = "성장과 안정의 균형을 추구하는 구조입니다."
     else:
@@ -149,7 +166,7 @@ def generate_personalized_content(
     elif len(held_types) == 2:
         strengths.append(f"{held_types[0]}·{held_types[1]} 결합으로 수익성·안정성 동시 추구")
 
-    if risky_w >= 60 and age <= 40:
+    if risky_w >= _RISKY_CAUTION_THRESHOLD and age <= _YOUNG_AGE_THRESHOLD:
         strengths.append(f"{age}세 젊은 나이에 위험자산 {risky_w:.0f}% 보유로 장기 복리 성장 극대화 가능")
 
     if cash_w + bond_w >= 15:
@@ -167,14 +184,14 @@ def generate_personalized_content(
     # 단일 자산 집중 (비트코인 포함)
     max_w = max(a.weight for a in portfolio.allocations)
     max_name = next(a.asset_name for a in portfolio.allocations if a.weight == max_w)
-    if max_w >= 40:
+    if max_w >= _CONCENTRATION_THRESHOLD:
         weaknesses.append(f"'{max_name}' 단일 비중 {max_w:.0f}%로 집중 — 해당 자산 급락 시 전체 포트폴리오 영향 큼")
 
     # 암호화폐(비트코인/기타) 고변동성 경고
     crypto_allocs = [a for a in portfolio.allocations if a.asset_type in (AssetType.BITCOIN, AssetType.CRYPTO)]
     if crypto_allocs:
         crypto_w = sum(a.weight for a in crypto_allocs)
-        if crypto_w >= 20:
+        if crypto_w >= _CRYPTO_WARNING_THRESHOLD:
             weaknesses.append(
                 f"암호화폐 {crypto_w:.0f}% — 연 변동성 70~80%+ 자산으로 단기 50~70% 급락 가능성 존재, "
                 f"손실 감내 능력 충분히 고려 필요"
@@ -427,12 +444,12 @@ def _generate_market_commentary(
     parts = []
 
     # 금리 환경
-    if market.us_10y_yield >= 4.5:
+    if market.us_10y_yield >= _HIGH_RATE_YIELD:
         parts.append(
             f"미국 10년 국채 금리 {market.us_10y_yield:.2f}%로 고금리 환경 지속 중으로, "
             f"채권·현금 비중 확대가 수익 방어에 유리합니다."
         )
-    elif market.us_10y_yield >= 3.5:
+    elif market.us_10y_yield >= _MID_RATE_YIELD:
         parts.append(
             f"미국 10년 국채 금리 {market.us_10y_yield:.2f}%는 중립적 수준으로, "
             f"주식·채권 균형 유지가 적절한 전략입니다."
@@ -445,8 +462,8 @@ def _generate_market_commentary(
 
     # 해외 주식 보유자만 환율 코멘트
     foreign_w = sum(a.weight for a in portfolio.allocations if a.asset_type == AssetType.FOREIGN_STOCK)
-    if foreign_w >= 20:
-        if market.usd_krw >= 1400:
+    if foreign_w >= _FOREIGN_STOCK_THRESHOLD:
+        if market.usd_krw >= _FX_WEAK_KRW:
             parts.append(
                 f"달러/원 환율 {market.usd_krw:,.0f}원으로 원화 약세가 지속되어, "
                 f"해외주식 {foreign_w:.0f}% 보유 포트폴리오는 환차익 효과가 기대됩니다. "
@@ -468,7 +485,7 @@ def _generate_market_commentary(
         )
 
     # 인플레이션
-    if market.cpi_us >= 3.0:
+    if market.cpi_us >= _HIGH_CPI_THRESHOLD:
         parts.append(
             f"미국 CPI {market.cpi_us:.1f}%로 인플레이션 압력이 지속되고 있어 "
             f"실질 수익률 보호를 위한 자산 다각화를 고려하시기 바랍니다."
@@ -503,7 +520,7 @@ def _generate_cautions(
         )
 
     risky_w = _risk_asset_weight(g)
-    if risky_w >= 60:
+    if risky_w >= _RISKY_CAUTION_THRESHOLD:
         cautions.append(
             f"위험자산 {risky_w:.0f}%로 시장 급락 시 단기 평가손실이 발생할 수 있습니다. "
             f"장기 관점을 유지하며 공황 매도를 피하는 것이 중요합니다."

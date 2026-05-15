@@ -11,6 +11,8 @@ from models.portfolio import AssetType, Allocation
 from models.report import MarketSnapshot
 from services.market_data import (
     MARKET_DEFAULTS,
+    BASE_RETURNS,
+    BASE_VOLATILITY,
     _HIGH_RATE_THRESHOLD,
     _HIGH_RATE_BOND_BOOST,
     _HIGH_RATE_STOCK_DRAG,
@@ -121,3 +123,17 @@ class TestGetAssetReturn:
         ret_no_ticker, vol_no_ticker = get_asset_return(_alloc(AssetType.FOREIGN_STOCK), snap)
         assert abs(ret_with_ticker - ret_no_ticker) < 1e-9
         assert abs(vol_with_ticker - vol_no_ticker) < 1e-9
+
+
+# ── 딕셔너리 커버리지 ─────────────────────────────────────────────────────────
+
+class TestDictionaryCoverage:
+    def test_base_returns_covers_all_asset_types(self):
+        """BASE_RETURNS가 모든 AssetType을 커버해야 한다 — 누락 시 _DEFAULT_RETURN으로 조용히 fallback됨"""
+        missing = set(AssetType) - set(BASE_RETURNS.keys())
+        assert not missing, f"BASE_RETURNS에서 누락된 AssetType: {missing}"
+
+    def test_base_volatility_covers_all_asset_types(self):
+        """BASE_VOLATILITY가 모든 AssetType을 커버해야 한다 — 누락 시 _DEFAULT_VOLATILITY로 조용히 fallback됨"""
+        missing = set(AssetType) - set(BASE_VOLATILITY.keys())
+        assert not missing, f"BASE_VOLATILITY에서 누락된 AssetType: {missing}"
