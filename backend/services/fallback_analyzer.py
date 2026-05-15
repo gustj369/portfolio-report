@@ -484,6 +484,8 @@ def _generate_market_commentary(
             )
 
     # 암호화폐(비트코인/기타) 보유자 전용 코멘트
+    # 비중 무관 — 소액 보유자도 규제·거래소 리스크 기본 안내가 필요하므로 보유 여부만 체크
+    # (약점 섹션의 _CRYPTO_WARNING_THRESHOLD(20%)는 "비중 과다" 경고로 목적이 다름)
     crypto_allocs = [a for a in portfolio.allocations if a.asset_type in (AssetType.BITCOIN, AssetType.CRYPTO)]
     if crypto_allocs:
         crypto_w = sum(a.weight for a in crypto_allocs)
@@ -511,6 +513,7 @@ def _generate_cautions(
     """포트폴리오 맞춤 주의사항"""
     cautions = []
 
+    # 비중 무관 — 소액 보유자도 규제·거래소 리스크 기본 안내가 필요하므로 보유 여부만 체크
     crypto_allocs = [a for a in portfolio.allocations if a.asset_type in (AssetType.BITCOIN, AssetType.CRYPTO)]
     if crypto_allocs:
         crypto_w = sum(a.weight for a in crypto_allocs)
