@@ -11,7 +11,7 @@ from models.portfolio import (
     UserProfile, Portfolio, Allocation,
     InvestmentGoal, RiskTolerance, AssetType,
 )
-from services.market_data import fetch_market_snapshot, MARKET_DEFAULTS
+from services.market_data import fetch_market_snapshot
 from services.simulator import run_simulation, calculate_risk_score
 from services.fallback_analyzer import generate_personalized_content
 from services.chart_generator import (
@@ -21,9 +21,7 @@ from services.chart_generator import (
     generate_rebalancing_comparison_chart,
 )
 from services.pdf_generator import build_report
-from models.report import AIContent, MarketSnapshot
-from datetime import datetime, timezone
-import pytest
+from models.report import AIContent
 
 
 # ─────────────────────────────────────────────
@@ -356,15 +354,6 @@ def _sample_data():
 #  pytest 자동 검증 (python -m pytest 로 실행)
 #  _sample_data()는 네트워크 없이 순수 객체만 생성하므로 mock 불필요
 # ─────────────────────────────────────────────
-
-@pytest.fixture
-def sample():
-    """샘플 포트폴리오 + 기본값 MarketSnapshot 묶음 — 네트워크 없이 생성"""
-    user_profile, portfolio = _sample_data()
-    fields = dict(MARKET_DEFAULTS)
-    fields["fetched_at"] = datetime.now(timezone.utc)
-    market_snapshot = MarketSnapshot(**fields)
-    return user_profile, portfolio, market_snapshot
 
 def test_sample_data_portfolio_weights_sum_to_100():
     """샘플 포트폴리오 비중 합계가 100이어야 한다"""

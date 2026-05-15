@@ -522,10 +522,11 @@ def _generate_cautions(
     foreign_allocs = [a for a in portfolio.allocations if a.asset_type == AssetType.FOREIGN_STOCK]
     if foreign_allocs:
         foreign_w = sum(a.weight for a in foreign_allocs)
-        cautions.append(
-            f"해외 ETF 투자 시 환율 변동(현재 {market.usd_krw:,.0f}원)이 원화 실질 수익률에 미치는 영향을 "
-            f"정기적으로 확인하세요."
-        )
+        if foreign_w >= _FOREIGN_STOCK_THRESHOLD:
+            cautions.append(
+                f"해외 ETF 투자 시 환율 변동(현재 {market.usd_krw:,.0f}원)이 원화 실질 수익률에 미치는 영향을 "
+                f"정기적으로 확인하세요."
+            )
 
     risky_w = _risk_asset_weight(g)
     if risky_w >= _RISKY_CAUTION_THRESHOLD:
