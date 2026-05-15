@@ -239,6 +239,30 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
 
     # ── SP500 fallback + 최종 로그 ────────────────────────────
     if data["sp500"] == MARKET_DEFAULTS["sp500"]:
+        # fallback 1: fast_info
+        try:
+            t = yf.Ticker("^GSPC")
+            fp = float(t.fast_info.last_price or 0)
+            if _SP500_MIN <= fp <= _SP500_MAX:
+                data["sp500"] = fp
+        except Exception as e:
+            logger.warning(f"SP500 fast_info fallback 실패: {e}")
+
+    if data["sp500"] == MARKET_DEFAULTS["sp500"]:
+        # fallback 2: yf.download (다른 내부 엔드포인트 사용)
+        try:
+            dl = yf.download("^GSPC", period="5d", interval="1d", progress=False, auto_adjust=True)
+            if not dl.empty:
+                close = dl["Close"].dropna()
+                if not close.empty:
+                    fp = float(close.iloc[-1])
+                    if _SP500_MIN <= fp <= _SP500_MAX:
+                        data["sp500"] = fp
+        except Exception as e:
+            logger.warning(f"SP500 yf.download fallback 실패: {e}")
+
+    if data["sp500"] == MARKET_DEFAULTS["sp500"]:
+        # fallback 3: stooq.com CSV
         try:
             resp = requests.get(
                 "https://stooq.com/q/l/?s=%5Espx&f=sd2t2ohlcv&h&e=csv",
