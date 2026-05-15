@@ -83,6 +83,11 @@ _HIGH_RATE_STOCK_DRAG = 0.005 # 고금리 환경에서 주식 수익률 차감
 _INFLATION_IMPACT_FACTOR = 0.3 # 인플레이션이 채권/현금 실질 수익률에 미치는 비율
 _MIN_REAL_RETURN = 0.01       # 채권/현금 실질 수익률 하한
 
+# 과거 수익률 계산 파라미터 (_fetch_historical_stats 사용)
+_HIST_YEARS = 5          # 과거 데이터 조회 기간 (연)
+_MONTHS_PER_YEAR = 12    # 월간 수익률 → 연환산 인수
+_MIN_HIST_MONTHS = 12    # 유효한 계산을 위한 최소 월 데이터 수
+
 
 def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
     """현재 시장 데이터 스냅샷 수집"""
@@ -536,18 +541,18 @@ def _adjust_return_for_market(
 
 
 def _fetch_historical_stats(ticker: str) -> tuple[float, float]:
-    """티커의 과거 5년 연평균 수익률과 변동성 계산"""
+    """티커의 과거 수익률과 변동성 계산 (기간: _HIST_YEARS년, 월간 데이터 기준)"""
     t = yf.Ticker(ticker)
     end = datetime.now(timezone.utc)   # timezone-aware: yfinance 내부 비교 시 TypeError 방지
-    start = end - timedelta(days=365 * 5)
+    start = end - timedelta(days=365 * _HIST_YEARS)
     hist = t.history(start=start, end=end, interval="1mo")
 
-    if hist.empty or len(hist) < 12:
+    if hist.empty or len(hist) < _MIN_HIST_MONTHS:
         raise ValueError(f"데이터 부족: {ticker}")
 
     monthly_returns = hist["Close"].pct_change().dropna()
-    annual_return = float((1 + monthly_returns.mean()) ** 12 - 1)
-    annual_vol = float(monthly_returns.std() * (12 ** 0.5))
+    annual_return = float((1 + monthly_returns.mean()) ** _MONTHS_PER_YEAR - 1)
+    annual_vol = float(monthly_returns.std() * (_MONTHS_PER_YEAR ** 0.5))
 
     return annual_return, annual_vol
 
