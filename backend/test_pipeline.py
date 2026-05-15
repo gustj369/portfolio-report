@@ -11,8 +11,9 @@ from models.portfolio import (
     UserProfile, Portfolio, Allocation,
     InvestmentGoal, RiskTolerance, AssetType,
 )
-from services.market_data import fetch_market_snapshot
+from services.market_data import fetch_market_snapshot, MARKET_DEFAULTS
 from services.simulator import run_simulation, calculate_risk_score
+from services.fallback_analyzer import generate_personalized_content
 from services.chart_generator import (
     generate_portfolio_pie_chart,
     generate_projection_line_chart,
@@ -20,7 +21,9 @@ from services.chart_generator import (
     generate_rebalancing_comparison_chart,
 )
 from services.pdf_generator import build_report
-from models.report import AIContent
+from models.report import AIContent, MarketSnapshot
+from datetime import datetime, timezone
+import pytest
 
 
 # ─────────────────────────────────────────────
@@ -354,6 +357,15 @@ def _sample_data():
 #  _sample_data()는 네트워크 없이 순수 객체만 생성하므로 mock 불필요
 # ─────────────────────────────────────────────
 
+@pytest.fixture
+def sample():
+    """샘플 포트폴리오 + 기본값 MarketSnapshot 묶음 — 네트워크 없이 생성"""
+    user_profile, portfolio = _sample_data()
+    fields = dict(MARKET_DEFAULTS)
+    fields["fetched_at"] = datetime.now(timezone.utc)
+    market_snapshot = MarketSnapshot(**fields)
+    return user_profile, portfolio, market_snapshot
+
 def test_sample_data_portfolio_weights_sum_to_100():
     """샘플 포트폴리오 비중 합계가 100이어야 한다"""
     _, portfolio = _sample_data()
@@ -375,6 +387,26 @@ def test_sample_data_allocations_are_nonempty():
     assert len(portfolio.allocations) >= 1
     for a in portfolio.allocations:
         assert a.weight > 0, f"비중 0인 자산 발견: {a.asset_name}"
+
+
+def test_simulation_bear_base_bull_ordering(sample):
+    """비관 ≤ 기본 ≤ 낙관 순서로 최종 자산이 정렬되어야 한다"""
+    _, portfolio, market_snapshot = sample
+    result = run_simulation(portfolio, market_snapshot)
+    assert result.bear.final_value <= result.base.final_value
+    assert result.base.final_value <= result.bull.final_value
+
+
+def test_rebalancing_recommended_weights_sum_to_100(sample):
+    """리밸런싱 추천 비중 합계가 100%에 근접해야 한다"""
+    user_profile, portfolio, market_snapshot = sample
+    simulation = run_simulation(portfolio, market_snapshot)
+    risk_score, risk_grade = calculate_risk_score(portfolio, market_snapshot)
+    content = generate_personalized_content(
+        user_profile, portfolio, simulation, market_snapshot, risk_score, risk_grade
+    )
+    total = sum(r.recommended_weight for r in content.rebalancing_recommendations)
+    assert abs(total - 100.0) < 0.5, f"추천 비중 합계 오류: {total:.1f}%"
 
 
 if __name__ == "__main__":

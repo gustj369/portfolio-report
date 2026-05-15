@@ -28,6 +28,8 @@ _BOND_WEIGHT_MAX = 60.0       # 채권 추천 비중 상한
 _ALT_WEIGHT_MAX = 50.0        # 대안자산 추천 비중 상한
 _EQUITY_WEIGHT_MIN = 5.0      # 주식 추천 비중 하한
 _EQUITY_WEIGHT_MAX = 95.0     # 주식 추천 비중 상한
+_DIRECTION_THRESHOLD = 0.5    # 방향 판정 허용 오차 — 이 값 미만 변동은 "유지"로 분류
+_WEIGHT_CORRECTION_MIN = 0.1  # 비중 합계 보정 실행 임계 — 이 값 이상 오차 발생 시 보정
 
 # 리스크 성향별 목표 자산 배분 (%)
 _TARGET_ALLOC = {
@@ -319,7 +321,7 @@ def _generate_rebalancing(portfolio: Portfolio, g: dict, target: dict, risk_grad
         per_adj = bond_diff / len(bond_allocs)
         for a in bond_allocs:
             new_w = round(max(0.0, min(_BOND_WEIGHT_MAX, a.weight + per_adj)), 1)
-            direction = "증가" if new_w > a.weight + 0.5 else ("감소" if new_w < a.weight - 0.5 else "유지")
+            direction = "증가" if new_w > a.weight + _DIRECTION_THRESHOLD else ("감소" if new_w < a.weight - _DIRECTION_THRESHOLD else "유지")
             asset_display = a.asset_name if a.asset_name else ("단기채권" if a.asset_type == AssetType.SHORT_BOND else "채권")
             if direction == "증가":
                 reason = f"고금리 환경에서 {asset_display} 매력 상승 — {risk_grade} 목표({target_bond:.0f}%) 향해 점진적 확대"
@@ -360,7 +362,7 @@ def _generate_rebalancing(portfolio: Portfolio, g: dict, target: dict, risk_grad
         per_adj = alt_diff / len(alt_allocs)
         for a in alt_allocs:
             new_w = round(max(0.0, min(_ALT_WEIGHT_MAX, a.weight + per_adj)), 1)
-            direction = "증가" if new_w > a.weight + 0.5 else ("감소" if new_w < a.weight - 0.5 else "유지")
+            direction = "증가" if new_w > a.weight + _DIRECTION_THRESHOLD else ("감소" if new_w < a.weight - _DIRECTION_THRESHOLD else "유지")
             reason = _alt_reason(direction, a.asset_type, a.asset_name, target_alt, a.weight, new_w)
             recs.append({"asset_name": a.asset_name, "current_weight": a.weight,
                           "recommended_weight": new_w, "direction": direction, "reason": reason})
@@ -371,7 +373,7 @@ def _generate_rebalancing(portfolio: Portfolio, g: dict, target: dict, risk_grad
         per_adj = equity_diff / len(equity_allocs)
         for a in equity_allocs:
             new_w = round(max(_EQUITY_WEIGHT_MIN, min(_EQUITY_WEIGHT_MAX, a.weight + per_adj)), 1)
-            direction = "증가" if new_w > a.weight + 0.5 else ("감소" if new_w < a.weight - 0.5 else "유지")
+            direction = "증가" if new_w > a.weight + _DIRECTION_THRESHOLD else ("감소" if new_w < a.weight - _DIRECTION_THRESHOLD else "유지")
             reason = _equity_reason(direction, risk_grade, target["equity"])
             recs.append({"asset_name": a.asset_name, "current_weight": a.weight,
                           "recommended_weight": new_w, "direction": direction, "reason": reason})
@@ -379,7 +381,7 @@ def _generate_rebalancing(portfolio: Portfolio, g: dict, target: dict, risk_grad
     # ── 비중 합 100% 미세 보정 ───────────────────────────────────
     total_rec = sum(r["recommended_weight"] for r in recs)
     diff = round(100.0 - total_rec, 1)
-    if abs(diff) >= 0.1:
+    if abs(diff) >= _WEIGHT_CORRECTION_MIN:
         # 조정 가능한 자산 중 비중이 가장 큰 자산에서 잔차 흡수
         adjustable = [r for r in recs if r["direction"] in ("증가", "감소", "유지")
                       and r.get("recommended_weight", 0) >= 5.0]
@@ -392,7 +394,7 @@ def _generate_rebalancing(portfolio: Portfolio, g: dict, target: dict, risk_grad
             largest["recommended_weight"] = round(largest["recommended_weight"] + diff, 1)
             # 보정 후 방향 재계산
             gap = largest["recommended_weight"] - largest["current_weight"]
-            if abs(gap) < 0.5:
+            if abs(gap) < _DIRECTION_THRESHOLD:
                 largest["direction"] = "유지"
             elif gap < 0:
                 largest["direction"] = "감소"
