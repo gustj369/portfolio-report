@@ -59,18 +59,27 @@ FRED_SERIES = {
 # 한국 기준금리 (FRED에 없을 경우 기본값)
 KR_BASE_RATE_DEFAULT = 3.5
 
+# 시장 데이터 수집 실패 시 사용하는 fallback 기본값
+MARKET_DEFAULTS: dict[str, float] = {
+    "sp500": 5000.0,
+    "kospi": 2500.0,
+    "us_10y_yield": 4.3,
+    "kr_base_rate": 3.5,
+    "usd_krw": 1350.0,
+    "gold_price": 2300.0,
+    "cpi_us": 3.2,
+}
+
+# 시장 데이터 유효 범위 (오염 데이터 필터링용)
+_SP500_MIN, _SP500_MAX = 1000, 10000
+_KOSPI_MIN, _KOSPI_MAX = 1000, 5000
+_USD_KRW_MIN, _USD_KRW_MAX = 800, 2000
+_GOLD_MIN, _GOLD_MAX = 500, 5000
+
 
 def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
     """현재 시장 데이터 스냅샷 수집"""
-    data = {
-        "sp500": 5000.0,
-        "kospi": 2500.0,
-        "us_10y_yield": 4.3,
-        "kr_base_rate": 3.5,
-        "usd_krw": 1350.0,
-        "gold_price": 2300.0,
-        "cpi_us": 3.2,
-    }
+    data = dict(MARKET_DEFAULTS)
 
     # Yahoo Finance에서 시장 지수 수집
     for key, ticker in MARKET_TICKERS.items():
@@ -84,26 +93,26 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                     continue
                 price = float(close_data.iloc[-1])
                 if key == "sp500":
-                    # S&P 500: 합리적 범위 체크 (1000~10000)
-                    if 1000 <= price <= 10000:
+                    # S&P 500: 합리적 범위 체크
+                    if _SP500_MIN <= price <= _SP500_MAX:
                         data["sp500"] = price
                 elif key == "kospi":
-                    # KOSPI: 합리적 범위 체크 (1000~5000)
-                    if 1000 <= price <= 5000:
+                    # KOSPI: 합리적 범위 체크
+                    if _KOSPI_MIN <= price <= _KOSPI_MAX:
                         data["kospi"] = price
                     else:
                         # fast_info fallback
                         try:
                             fp = float(t.fast_info.last_price or 0)
-                            if 1000 <= fp <= 5000:
+                            if _KOSPI_MIN <= fp <= _KOSPI_MAX:
                                 data["kospi"] = fp
                         except Exception:
                             pass
                 elif key == "gold":
                     data["gold_price"] = price
                 elif key == "usd_krw":
-                    # 환율: 합리적 범위 체크 (800~2000)
-                    if 800 <= price <= 2000:
+                    # 환율: 합리적 범위 체크
+                    if _USD_KRW_MIN <= price <= _USD_KRW_MAX:
                         data["usd_krw"] = price
             else:
                 logger.warning(f"시장 데이터 빈 응답 ({ticker}) — 건너뜀")
@@ -111,17 +120,17 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
             logger.warning(f"시장 데이터 수집 실패 ({ticker}): {e}")
 
     # KOSPI 다중 fallback (history가 비어있거나 환경 문제로 실패 시)
-    if data["kospi"] == 2500.0:
+    if data["kospi"] == MARKET_DEFAULTS["kospi"]:
         # fallback 1: fast_info
         try:
             t = yf.Ticker("^KS11")
             fp = float(t.fast_info.last_price or 0)
-            if 1000 <= fp <= 5000:
+            if _KOSPI_MIN <= fp <= _KOSPI_MAX:
                 data["kospi"] = fp
         except Exception as e:
             logger.warning(f"KOSPI fast_info fallback 실패: {e}")
 
-    if data["kospi"] == 2500.0:
+    if data["kospi"] == MARKET_DEFAULTS["kospi"]:
         # fallback 2: yf.download (다른 내부 엔드포인트 사용)
         try:
             dl = yf.download("^KS11", period="5d", interval="1d", progress=False, auto_adjust=True)
@@ -129,22 +138,22 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                 close = dl["Close"].dropna()
                 if not close.empty:
                     fp = float(close.iloc[-1])
-                    if 1000 <= fp <= 5000:
+                    if _KOSPI_MIN <= fp <= _KOSPI_MAX:
                         data["kospi"] = fp
         except Exception as e:
             logger.warning(f"KOSPI yf.download fallback 실패: {e}")
 
-    if data["kospi"] == 2500.0:
+    if data["kospi"] == MARKET_DEFAULTS["kospi"]:
         # fallback 3: Ticker.info regularMarketPrice
         try:
             info = yf.Ticker("^KS11").info
             fp = float(info.get("regularMarketPrice") or info.get("currentPrice") or 0)
-            if 1000 <= fp <= 5000:
+            if _KOSPI_MIN <= fp <= _KOSPI_MAX:
                 data["kospi"] = fp
         except Exception as e:
             logger.warning(f"KOSPI info fallback 실패: {e}")
 
-    if data["kospi"] == 2500.0:
+    if data["kospi"] == MARKET_DEFAULTS["kospi"]:
         # fallback 4: Naver Finance (Yahoo Finance와 완전히 독립된 국내 소스 — 가장 안정적)
         # API 키 불필요 — 네이버 금융 모바일 앱이 사용하는 공개 JSON 엔드포인트
         try:
@@ -166,7 +175,7 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                     or "0"
                 )
                 fp = float(str(raw).replace(",", ""))
-                if 1000 <= fp <= 5000:
+                if _KOSPI_MIN <= fp <= _KOSPI_MAX:
                     data["kospi"] = fp
                     logger.info(f"KOSPI Naver Finance fallback 성공: {fp}")
                 elif fp == 0:
@@ -175,7 +184,7 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
         except Exception as e:
             logger.warning(f"KOSPI Naver Finance fallback 실패: {e}")
 
-    if data["kospi"] == 2500.0:
+    if data["kospi"] == MARKET_DEFAULTS["kospi"]:
         # fallback 5: stooq.com CSV (Yahoo Finance·Naver와 완전히 독립적인 유럽 데이터 소스)
         try:
             resp = requests.get(
@@ -209,20 +218,20 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                             days_old = (datetime.now(KST).date() - stooq_date).days
                             if days_old > 5:
                                 logger.warning(f"KOSPI stooq 데이터 오래됨 ({days_old}일, {stooq_date_str}) — 건너뜀")
-                            elif 1000 <= fp <= 5000:
+                            elif _KOSPI_MIN <= fp <= _KOSPI_MAX:
                                 data["kospi"] = fp
                                 logger.info(f"KOSPI stooq fallback 성공: {fp} ({stooq_date_str})")
         except Exception as e:
             logger.warning(f"KOSPI stooq fallback 실패: {e}")
 
     # KOSPI 최종 상태 로그 (Render 로그에서 확인용)
-    if data["kospi"] == 2500.0:
+    if data["kospi"] == MARKET_DEFAULTS["kospi"]:
         logger.warning("KOSPI 전체 fallback 실패 — 기본값 2500 사용 중")
     else:
         logger.info(f"KOSPI 최종값: {data['kospi']:.2f}")
 
     # ── SP500 fallback + 최종 로그 ────────────────────────────
-    if data["sp500"] == 5000.0:
+    if data["sp500"] == MARKET_DEFAULTS["sp500"]:
         try:
             resp = requests.get(
                 "https://stooq.com/q/l/?s=%5Espx&f=sd2t2ohlcv&h&e=csv",
@@ -253,19 +262,19 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                             days_old = (datetime.now(KST).date() - stooq_date).days
                             if days_old > 5:
                                 logger.warning(f"SP500 stooq 데이터 오래됨 ({days_old}일, {stooq_date_str}) — 건너뜀")
-                            elif 1000 <= fp <= 10000:
+                            elif _SP500_MIN <= fp <= _SP500_MAX:
                                 data["sp500"] = fp
                                 logger.info(f"SP500 stooq fallback 성공: {fp} ({stooq_date_str})")
         except Exception as e:
             logger.warning(f"SP500 stooq fallback 실패: {e}")
 
-    if data["sp500"] == 5000.0:
+    if data["sp500"] == MARKET_DEFAULTS["sp500"]:
         logger.warning("SP500 전체 fallback 실패 — 기본값 5000 사용 중")
     else:
         logger.info(f"SP500 최종값: {data['sp500']:.2f}")
 
     # ── USD/KRW fallback ──────────────────────────────────────
-    if data["usd_krw"] == 1350.0:
+    if data["usd_krw"] == MARKET_DEFAULTS["usd_krw"]:
         # fallback 1: stooq.com CSV — 장 마감 기준 최신 데이터 (open.er-api 24h 캐시보다 신선)
         try:
             resp = requests.get(
@@ -301,7 +310,7 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                             days_old = (datetime.now(KST).date() - stooq_date).days
                             if days_old > 5:
                                 logger.warning(f"USD/KRW stooq 데이터 오래됨 ({days_old}일, {stooq_date_str}) — 건너뜀")
-                            elif 800 <= krw <= 2000:
+                            elif _USD_KRW_MIN <= krw <= _USD_KRW_MAX:
                                 data["usd_krw"] = krw
                                 logger.info(f"USD/KRW stooq fallback 성공: {krw} ({stooq_date_str})")
                             else:
@@ -310,7 +319,7 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
         except Exception as e:
             logger.warning(f"USD/KRW stooq fallback 실패: {e}")
 
-    if data["usd_krw"] == 1350.0:
+    if data["usd_krw"] == MARKET_DEFAULTS["usd_krw"]:
         # fallback 2: open.er-api.com — 무료, 인증 불필요 (무료 플랜 24h 캐시)
         try:
             resp = requests.get(
@@ -320,20 +329,20 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
             )
             if resp.ok:
                 krw = float(resp.json().get("rates", {}).get("KRW", 0))
-                if 800 <= krw <= 2000:
+                if _USD_KRW_MIN <= krw <= _USD_KRW_MAX:
                     data["usd_krw"] = krw
                     logger.info(f"USD/KRW open.er-api fallback 성공: {krw}")
         except Exception as e:
             logger.warning(f"USD/KRW open.er-api fallback 실패: {e}")
 
     # USD/KRW 최종 상태 로그 (Render 로그에서 확인용)
-    if data["usd_krw"] == 1350.0:
+    if data["usd_krw"] == MARKET_DEFAULTS["usd_krw"]:
         logger.warning("USD/KRW 전체 fallback 실패 — 기본값 1350 사용 중")
     else:
         logger.info(f"USD/KRW 최종값: {data['usd_krw']:.2f}")
 
     # ── 금값 fallback ─────────────────────────────────────────
-    if data["gold_price"] == 2300.0:
+    if data["gold_price"] == MARKET_DEFAULTS["gold_price"]:
         # stooq.com XAU/USD (트로이 온스 기준 달러 가격)
         try:
             resp = requests.get(
@@ -365,13 +374,13 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                             days_old = (datetime.now(KST).date() - stooq_date).days
                             if days_old > 5:
                                 logger.warning(f"금 stooq 데이터 오래됨 ({days_old}일, {stooq_date_str}) — 건너뜀")
-                            elif 500 <= fp <= 5000:
+                            elif _GOLD_MIN <= fp <= _GOLD_MAX:
                                 data["gold_price"] = fp
                                 logger.info(f"금 stooq fallback 성공: {fp} ({stooq_date_str})")
         except Exception as e:
             logger.warning(f"금 stooq fallback 실패: {e}")
 
-    if data["gold_price"] == 2300.0:
+    if data["gold_price"] == MARKET_DEFAULTS["gold_price"]:
         logger.warning("금값 전체 fallback 실패 — 기본값 2300 사용 중")
     else:
         logger.info(f"금값 최종값: {data['gold_price']:.2f}")
@@ -381,19 +390,19 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
         return "(기본)" if val == default else ""
     logger.info(
         f"시장 데이터 수집 완료 — "
-        f"KOSPI:{data['kospi']:.0f}{_mark(data['kospi'], 2500.0)} "
-        f"SP500:{data['sp500']:.0f}{_mark(data['sp500'], 5000.0)} "
-        f"USD/KRW:{data['usd_krw']:.0f}{_mark(data['usd_krw'], 1350.0)} "
-        f"금:{data['gold_price']:.0f}{_mark(data['gold_price'], 2300.0)}"
+        f"KOSPI:{data['kospi']:.0f}{_mark(data['kospi'], MARKET_DEFAULTS['kospi'])} "
+        f"SP500:{data['sp500']:.0f}{_mark(data['sp500'], MARKET_DEFAULTS['sp500'])} "
+        f"USD/KRW:{data['usd_krw']:.0f}{_mark(data['usd_krw'], MARKET_DEFAULTS['usd_krw'])} "
+        f"금:{data['gold_price']:.0f}{_mark(data['gold_price'], MARKET_DEFAULTS['gold_price'])}"
     )
 
     # 핵심 지표 기본값 사용 집계 — 2개 이상 기본값이면 시뮬레이션 결과 신뢰도가 크게 낮아짐
     _fallback_used = [
         name for name, val, default in [
-            ("KOSPI", data["kospi"], 2500.0),
-            ("S&P500", data["sp500"], 5000.0),
-            ("USD/KRW", data["usd_krw"], 1350.0),
-            ("금", data["gold_price"], 2300.0),
+            ("KOSPI", data["kospi"], MARKET_DEFAULTS["kospi"]),
+            ("S&P500", data["sp500"], MARKET_DEFAULTS["sp500"]),
+            ("USD/KRW", data["usd_krw"], MARKET_DEFAULTS["usd_krw"]),
+            ("금", data["gold_price"], MARKET_DEFAULTS["gold_price"]),
         ] if val == default
     ]
     if len(_fallback_used) >= 2:
