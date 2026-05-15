@@ -83,10 +83,11 @@ _HIGH_RATE_STOCK_DRAG = 0.005 # 고금리 환경에서 주식 수익률 차감
 _INFLATION_IMPACT_FACTOR = 0.3 # 인플레이션이 채권/현금 실질 수익률에 미치는 비율
 _MIN_REAL_RETURN = 0.01       # 채권/현금 실질 수익률 하한
 
-# 과거 수익률 계산 파라미터 (_fetch_historical_stats 사용)
-_HIST_YEARS = 5          # 과거 데이터 조회 기간 (연)
-_MONTHS_PER_YEAR = 12    # 월간 수익률 → 연환산 인수
-_MIN_HIST_MONTHS = 12    # 유효한 계산을 위한 최소 월 데이터 수
+# 과거 수익률 계산 파라미터 (_fetch_historical_stats / get_asset_return 사용)
+_HIST_YEARS = 5           # 과거 데이터 조회 기간 (연)
+_MONTHS_PER_YEAR = 12     # 월간 수익률 → 연환산 인수
+_MIN_HIST_MONTHS = 12     # 유효한 계산을 위한 최소 월 데이터 수
+_HIST_BLEND_RATIO = 0.5   # 역사적 수익률 블렌딩 비율 (0=기본값만, 1=역사적값만)
 
 
 def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
@@ -504,9 +505,9 @@ def get_asset_return(
     if allocation.ticker:
         try:
             hist_return, hist_vol = _fetch_historical_stats(allocation.ticker)
-            # 역사적 수익률과 기본값 50:50 블렌딩
-            adjusted_return = (adjusted_return + hist_return) / 2
-            base_vol = (base_vol + hist_vol) / 2
+            # 역사적 수익률과 기본값 블렌딩 (_HIST_BLEND_RATIO 비율)
+            adjusted_return = adjusted_return * (1 - _HIST_BLEND_RATIO) + hist_return * _HIST_BLEND_RATIO
+            base_vol = base_vol * (1 - _HIST_BLEND_RATIO) + hist_vol * _HIST_BLEND_RATIO
         except Exception as e:
             logger.warning(f"티커 {allocation.ticker} 과거 데이터 조회 실패: {e}")
 
