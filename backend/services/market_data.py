@@ -76,6 +76,13 @@ _KOSPI_MIN, _KOSPI_MAX = 1000, 5000
 _USD_KRW_MIN, _USD_KRW_MAX = 800, 2000
 _GOLD_MIN, _GOLD_MAX = 500, 5000
 
+# 수익률 조정 계수 (_adjust_return_for_market 사용)
+_HIGH_RATE_THRESHOLD = 4.5    # US 10Y 수익률이 이 값 초과 시 고금리 환경으로 판단
+_HIGH_RATE_BOND_BOOST = 0.01  # 고금리 환경에서 채권/현금 수익률 가산
+_HIGH_RATE_STOCK_DRAG = 0.005 # 고금리 환경에서 주식 수익률 차감
+_INFLATION_IMPACT_FACTOR = 0.3 # 인플레이션이 채권/현금 실질 수익률에 미치는 비율
+_MIN_REAL_RETURN = 0.01       # 채권/현금 실질 수익률 하한
+
 
 def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
     """현재 시장 데이터 스냅샷 수집"""
@@ -485,12 +492,12 @@ def _adjust_return_for_market(
     """시장 상황에 따른 수익률 조정"""
     adjusted = base_return
 
-    # 고금리 환경 (US 10Y > 4.5%): 채권/현금 상향, 주식 소폭 하향
-    if market.us_10y_yield > 4.5:
+    # 고금리 환경: 채권/현금 상향, 주식 소폭 하향
+    if market.us_10y_yield > _HIGH_RATE_THRESHOLD:
         if asset_type in (AssetType.BOND, AssetType.CASH):
-            adjusted += 0.01
+            adjusted += _HIGH_RATE_BOND_BOOST
         elif asset_type in (AssetType.FOREIGN_STOCK, AssetType.DOMESTIC_STOCK):
-            adjusted -= 0.005
+            adjusted -= _HIGH_RATE_STOCK_DRAG
 
     # 현금 수익률 = 한국 기준금리 연동
     if asset_type == AssetType.CASH:
@@ -499,7 +506,7 @@ def _adjust_return_for_market(
     # 인플레이션 조정 (실질 수익률)
     inflation_rate = market.cpi_us / 100
     if asset_type in (AssetType.BOND, AssetType.CASH):
-        adjusted = max(adjusted - inflation_rate * 0.3, 0.01)
+        adjusted = max(adjusted - inflation_rate * _INFLATION_IMPACT_FACTOR, _MIN_REAL_RETURN)
 
     return adjusted
 
