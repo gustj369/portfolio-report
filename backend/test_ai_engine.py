@@ -13,7 +13,10 @@ from models.portfolio import (
 )
 from models.report import SimulationResult, ScenarioResult, MarketSnapshot
 from services.market_data import MARKET_DEFAULTS
-from services.ai_engine import _extract_json, _parse_ai_results, generate_preview_summary
+from services.ai_engine import (
+    _extract_json, _parse_ai_results,
+    generate_preview_summary, generate_full_analysis,
+)
 
 
 # ── 헬퍼 ─────────────────────────────────────────────────────────────────────
@@ -108,8 +111,7 @@ class TestGeneratePreviewSummaryFallback:
         raw_response = "이것은 JSON이 아닙니다"
 
         with patch("services.ai_engine._call_gemini", return_value=raw_response), \
-             patch("services.ai_engine.genai.configure"), \
-             patch("services.ai_engine.genai.GenerativeModel"):
+             patch("services.ai_engine.genai.Client"):
             summary, risk_score, risk_grade = generate_preview_summary(
                 user_profile=_minimal_user_profile(),
                 portfolio=_minimal_portfolio(),
@@ -126,8 +128,7 @@ class TestGeneratePreviewSummaryFallback:
         raw_response = '{"summary": "양호한 포트폴리오", "risk_score": 42, "risk_grade": "중립형"}'
 
         with patch("services.ai_engine._call_gemini", return_value=raw_response), \
-             patch("services.ai_engine.genai.configure"), \
-             patch("services.ai_engine.genai.GenerativeModel"):
+             patch("services.ai_engine.genai.Client"):
             summary, risk_score, risk_grade = generate_preview_summary(
                 user_profile=_minimal_user_profile(),
                 portfolio=_minimal_portfolio(),
@@ -138,3 +139,43 @@ class TestGeneratePreviewSummaryFallback:
         assert summary == "양호한 포트폴리오"
         assert risk_score == 42
         assert risk_grade == "중립형"
+
+
+# ── generate_full_analysis 통합 경로 ─────────────────────────────────────────
+
+class TestGenerateFullAnalysis:
+    def test_happy_path_returns_parsed_ai_content(self):
+        """_call_gemini 3-call 시퀀스가 올바른 JSON을 반환하면 AIContent가 정상 파싱되어야 한다"""
+        diagnosis_json = (
+            '{"diagnosis": "분산이 잘 된 포트폴리오", '
+            '"strengths": ["분산투자"], "weaknesses": ["암호화폐 과다"], '
+            '"risk_score": 45, "risk_grade": "중립형", '
+            '"bear_commentary": "경기침체", "base_commentary": "현상유지", "bull_commentary": "강세장"}'
+        )
+        rebalancing_json = (
+            '{"recommendations": [{"asset_name": "주식", "current_weight": 100.0, '
+            '"recommended_weight": 80.0, "direction": "감소", "reason": "분산 필요"}]}'
+        )
+        market_json = (
+            '{"market_commentary": "고금리 지속", "cautions": ["원금 손실 가능", "정기 점검 권장"]}'
+        )
+
+        responses = iter([diagnosis_json, rebalancing_json, market_json])
+
+        with patch("services.ai_engine._call_gemini", side_effect=lambda *a, **kw: next(responses)), \
+             patch("services.ai_engine.genai.Client"):
+            result = generate_full_analysis(
+                user_profile=_minimal_user_profile(),
+                portfolio=_minimal_portfolio(),
+                simulation=_minimal_simulation(),
+                market_snapshot=_minimal_market_snapshot(),
+                api_key="dummy-key",
+            )
+
+        assert result.portfolio_diagnosis == "분산이 잘 된 포트폴리오"
+        assert result.risk_score == 45
+        assert result.risk_grade == "중립형"
+        assert len(result.rebalancing_recommendations) == 1
+        assert result.rebalancing_recommendations[0].asset_name == "주식"
+        assert result.market_commentary == "고금리 지속"
+        assert len(result.cautions) == 2
