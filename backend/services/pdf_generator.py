@@ -551,7 +551,7 @@ def _build_simulation_page(
     ]))
     story.append(scenario_table)
     story.append(Paragraph(
-        "* 연수익률 = (5년 후 예상 자산 ÷ 총 투자 원금)^(1/5) − 1 로 계산한 연환산 수익률 (총 투자 원금 = 초기 자산 + 월 적립 합계)",
+        "* 연수익률 = 시뮬레이션에 적용한 연간 기대수익률입니다. 월 적립식 투자 특성상 총 투자 원금 대비 단순 연환산 수익률과 다를 수 있습니다.",
         ParagraphStyle("SimNote", fontName=FONT_REGULAR, fontSize=7, textColor=colors.gray, spaceAfter=6, leading=10),
     ))
     story.append(Spacer(1, 4))

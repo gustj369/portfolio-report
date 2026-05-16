@@ -60,6 +60,65 @@ FRED_SERIES = {
 KR_BASE_RATE_DEFAULT = 3.5
 
 
+def _parse_stooq_close(
+    csv_text: str,
+    *,
+    label: str,
+    min_value: float,
+    max_value: float,
+    max_days_old: int = 5,
+    invert_if_fraction: bool = False,
+    today=None,
+) -> float | None:
+    """stooq CSV 응답에서 최신 Close 값을 안전하게 추출한다."""
+    if not csv_text:
+        return None
+
+    lines = csv_text.strip().split("\n")
+    if len(lines) < 2:
+        return None
+
+    cols = [c.strip() for c in lines[0].split(",")]
+    vals = [v.strip() for v in lines[1].split(",")]
+    close_idx = cols.index("Close") if "Close" in cols else 6
+    date_idx = cols.index("Date") if "Date" in cols else 1
+
+    if "Close" not in cols or "Date" not in cols:
+        logger.warning(f"{label} stooq 예상치 못한 헤더 (fallback 인덱스 사용): {cols[:8]}")
+
+    if len(vals) <= max(close_idx, date_idx):
+        logger.warning(f"{label} stooq 열 수 부족 — 건너뜀")
+        return None
+
+    if vals[close_idx] in ("N/A", "-", "", "null"):
+        logger.warning(f"{label} stooq N/A 수신 — 건너뜀")
+        return None
+
+    raw_date = vals[date_idx]
+    if raw_date in ("N/A", "-", "", "null"):
+        logger.warning(f"{label} stooq 날짜 N/A — 건너뜀")
+        return None
+
+    value = float(vals[close_idx])
+    if invert_if_fraction and 0 < value < 1:
+        value = round(1 / value, 2)
+        logger.info(f"{label} stooq 역단위 감지 → 역수 보정: {value}")
+
+    stooq_date = datetime.strptime(raw_date, "%Y-%m-%d").date()
+    today = today or datetime.now(KST).date()
+    days_old = (today - stooq_date).days
+    if days_old > max_days_old:
+        logger.warning(f"{label} stooq 데이터 오래됨 ({days_old}일, {raw_date}) — 건너뜀")
+        return None
+
+    if min_value <= value <= max_value:
+        logger.info(f"{label} stooq fallback 성공: {value} ({raw_date})")
+        return value
+
+    logger.warning(f"{label} stooq 범위 밖 수신: {value} (예상 {min_value:g}~{max_value:g}) — 건너뜀")
+    return None
+
+
 def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
     """현재 시장 데이터 스냅샷 수집"""
     data = {
@@ -184,34 +243,14 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                 timeout=10,
             )
             if resp.ok and resp.text:
-                lines = resp.text.strip().split("\n")
-                if len(lines) >= 2:
-                    cols = [c.strip() for c in lines[0].split(",")]
-                    vals = [v.strip() for v in lines[1].split(",")]
-                    close_idx = cols.index("Close") if "Close" in cols else 6  # f=sd2t2ohlcv 기준 Close는 인덱스 6
-                    date_idx = cols.index("Date") if "Date" in cols else 1  # f=sd2t2ohlcv 기준 Date는 인덱스 1
-                    if "Close" not in cols or "Date" not in cols:
-                        logger.warning(f"KOSPI stooq 예상치 못한 헤더 (fallback 인덱스 사용): {cols[:8]}")
-                    # 열 수 부족 방어: 빈 행 or 컬럼 누락 시 IndexError 방지
-                    if len(vals) <= max(close_idx, date_idx):
-                        logger.warning("KOSPI stooq 열 수 부족 — 건너뜀")
-                    elif vals[close_idx] in ("N/A", "-", "", "null"):
-                        logger.warning("KOSPI stooq N/A 수신 — 건너뜀")
-                    else:
-                        fp = float(vals[close_idx])
-                        raw_date = vals[date_idx]
-                        if raw_date in ("N/A", "-", "", "null"):
-                            logger.warning("KOSPI stooq 날짜 N/A — 건너뜀")
-                        else:
-                            stooq_date_str = raw_date
-                            # 날짜 검증: 주말 포함 최대 5일 이내 데이터만 사용
-                            stooq_date = datetime.strptime(stooq_date_str, "%Y-%m-%d").date()
-                            days_old = (datetime.now(KST).date() - stooq_date).days
-                            if days_old > 5:
-                                logger.warning(f"KOSPI stooq 데이터 오래됨 ({days_old}일, {stooq_date_str}) — 건너뜀")
-                            elif 1000 <= fp <= 5000:
-                                data["kospi"] = fp
-                                logger.info(f"KOSPI stooq fallback 성공: {fp} ({stooq_date_str})")
+                fp = _parse_stooq_close(
+                    resp.text,
+                    label="KOSPI",
+                    min_value=1000,
+                    max_value=5000,
+                )
+                if fp is not None:
+                    data["kospi"] = fp
         except Exception as e:
             logger.warning(f"KOSPI stooq fallback 실패: {e}")
 
@@ -230,32 +269,14 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                 timeout=10,
             )
             if resp.ok and resp.text:
-                lines = resp.text.strip().split("\n")
-                if len(lines) >= 2:
-                    cols = [c.strip() for c in lines[0].split(",")]
-                    vals = [v.strip() for v in lines[1].split(",")]
-                    close_idx = cols.index("Close") if "Close" in cols else 6  # f=sd2t2ohlcv 기준 Close는 인덱스 6
-                    date_idx = cols.index("Date") if "Date" in cols else 1  # f=sd2t2ohlcv 기준 Date는 인덱스 1
-                    if "Close" not in cols or "Date" not in cols:
-                        logger.warning(f"SP500 stooq 예상치 못한 헤더 (fallback 인덱스 사용): {cols[:8]}")
-                    if len(vals) <= max(close_idx, date_idx):
-                        logger.warning("SP500 stooq 열 수 부족 — 건너뜀")
-                    elif vals[close_idx] in ("N/A", "-", "", "null"):
-                        logger.warning("SP500 stooq N/A 수신 — 건너뜀")
-                    else:
-                        fp = float(vals[close_idx])
-                        raw_date = vals[date_idx]
-                        if raw_date in ("N/A", "-", "", "null"):
-                            logger.warning("SP500 stooq 날짜 N/A — 건너뜀")
-                        else:
-                            stooq_date_str = raw_date
-                            stooq_date = datetime.strptime(stooq_date_str, "%Y-%m-%d").date()
-                            days_old = (datetime.now(KST).date() - stooq_date).days
-                            if days_old > 5:
-                                logger.warning(f"SP500 stooq 데이터 오래됨 ({days_old}일, {stooq_date_str}) — 건너뜀")
-                            elif 1000 <= fp <= 10000:
-                                data["sp500"] = fp
-                                logger.info(f"SP500 stooq fallback 성공: {fp} ({stooq_date_str})")
+                fp = _parse_stooq_close(
+                    resp.text,
+                    label="SP500",
+                    min_value=1000,
+                    max_value=10000,
+                )
+                if fp is not None:
+                    data["sp500"] = fp
         except Exception as e:
             logger.warning(f"SP500 stooq fallback 실패: {e}")
 
@@ -274,39 +295,15 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                 timeout=10,
             )
             if resp.ok and resp.text:
-                lines = resp.text.strip().split("\n")
-                if len(lines) >= 2:
-                    cols = [c.strip() for c in lines[0].split(",")]
-                    vals = [v.strip() for v in lines[1].split(",")]
-                    close_idx = cols.index("Close") if "Close" in cols else 6  # f=sd2t2ohlcv 기준 Close는 인덱스 6
-                    date_idx = cols.index("Date") if "Date" in cols else 1  # f=sd2t2ohlcv 기준 Date는 인덱스 1
-                    if "Close" not in cols or "Date" not in cols:
-                        logger.warning(f"USD/KRW stooq 예상치 못한 헤더 (fallback 인덱스 사용): {cols[:8]}")
-                    if len(vals) <= max(close_idx, date_idx):
-                        logger.warning("USD/KRW stooq 열 수 부족 — 건너뜀")
-                    elif vals[close_idx] in ("N/A", "-", "", "null"):
-                        logger.warning("USD/KRW stooq N/A 수신 — 건너뜀")
-                    else:
-                        krw = float(vals[close_idx])
-                        # 역단위 자동 보정: stooq이 KRW/USD(≈0.00072) 대신 USD/KRW(≈1380) 반환 보장
-                        if 0 < krw < 1:
-                            krw = round(1 / krw, 2)
-                            logger.info(f"USD/KRW stooq 역단위 감지 → 역수 보정: {krw}")
-                        raw_date = vals[date_idx]
-                        if raw_date in ("N/A", "-", "", "null"):
-                            logger.warning("USD/KRW stooq 날짜 N/A — 건너뜀")
-                        else:
-                            stooq_date_str = raw_date
-                            stooq_date = datetime.strptime(stooq_date_str, "%Y-%m-%d").date()
-                            days_old = (datetime.now(KST).date() - stooq_date).days
-                            if days_old > 5:
-                                logger.warning(f"USD/KRW stooq 데이터 오래됨 ({days_old}일, {stooq_date_str}) — 건너뜀")
-                            elif 800 <= krw <= 2000:
-                                data["usd_krw"] = krw
-                                logger.info(f"USD/KRW stooq fallback 성공: {krw} ({stooq_date_str})")
-                            else:
-                                # 보정 후에도 범위 밖이면 진단 로그
-                                logger.warning(f"USD/KRW stooq 범위 밖 수신: {krw} (예상 800~2000) — 건너뜀")
+                krw = _parse_stooq_close(
+                    resp.text,
+                    label="USD/KRW",
+                    min_value=800,
+                    max_value=2000,
+                    invert_if_fraction=True,
+                )
+                if krw is not None:
+                    data["usd_krw"] = krw
         except Exception as e:
             logger.warning(f"USD/KRW stooq fallback 실패: {e}")
 
@@ -342,32 +339,14 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                 timeout=10,
             )
             if resp.ok and resp.text:
-                lines = resp.text.strip().split("\n")
-                if len(lines) >= 2:
-                    cols = [c.strip() for c in lines[0].split(",")]
-                    vals = [v.strip() for v in lines[1].split(",")]
-                    close_idx = cols.index("Close") if "Close" in cols else 6  # f=sd2t2ohlcv 기준 Close는 인덱스 6
-                    date_idx = cols.index("Date") if "Date" in cols else 1  # f=sd2t2ohlcv 기준 Date는 인덱스 1
-                    if "Close" not in cols or "Date" not in cols:
-                        logger.warning(f"금 stooq 예상치 못한 헤더 (fallback 인덱스 사용): {cols[:8]}")
-                    if len(vals) <= max(close_idx, date_idx):
-                        logger.warning("금 stooq 열 수 부족 — 건너뜀")
-                    elif vals[close_idx] in ("N/A", "-", "", "null"):
-                        logger.warning("금 stooq N/A 수신 — 건너뜀")
-                    else:
-                        fp = float(vals[close_idx])
-                        raw_date = vals[date_idx]
-                        if raw_date in ("N/A", "-", "", "null"):
-                            logger.warning("금 stooq 날짜 N/A — 건너뜀")
-                        else:
-                            stooq_date_str = raw_date
-                            stooq_date = datetime.strptime(stooq_date_str, "%Y-%m-%d").date()
-                            days_old = (datetime.now(KST).date() - stooq_date).days
-                            if days_old > 5:
-                                logger.warning(f"금 stooq 데이터 오래됨 ({days_old}일, {stooq_date_str}) — 건너뜀")
-                            elif 500 <= fp <= 5000:
-                                data["gold_price"] = fp
-                                logger.info(f"금 stooq fallback 성공: {fp} ({stooq_date_str})")
+                fp = _parse_stooq_close(
+                    resp.text,
+                    label="금",
+                    min_value=500,
+                    max_value=5000,
+                )
+                if fp is not None:
+                    data["gold_price"] = fp
         except Exception as e:
             logger.warning(f"금 stooq fallback 실패: {e}")
 

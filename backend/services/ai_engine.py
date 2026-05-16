@@ -245,6 +245,46 @@ def _call_gemini(model: genai.GenerativeModel, prompt: str, label: str = "") -> 
     return ""
 
 
+def _safe_int(value, default: int = 50) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _fallback_ai_content(portfolio: Portfolio) -> AIContent:
+    recommendations = [
+        {
+            "asset_name": a.asset_name,
+            "current_weight": a.weight,
+            "recommended_weight": a.weight,
+            "direction": "유지",
+            "reason": "AI 응답 검증 실패로 현재 비중 유지를 권장합니다.",
+        }
+        for a in portfolio.allocations
+    ]
+
+    return AIContent(
+        portfolio_diagnosis="AI 분석 응답 일부를 해석하지 못해 기본 분석으로 대체했습니다.",
+        strengths=["다양한 자산 보유", "꾸준한 적립 계획", "장기 투자 관점"],
+        weaknesses=["집중도 점검 필요", "리밸런싱 주기 설정 권장", "시장 변동성 확인 필요"],
+        risk_score=50,
+        risk_grade="중립형",
+        scenario_commentary={
+            "bear": "시장 변동성이 커질 경우 보수적인 점검이 필요합니다.",
+            "base": "현재 포트폴리오를 기준으로 기본 시나리오를 확인할 수 있습니다.",
+            "bull": "시장 회복 시 성장 자산의 기여도가 높아질 수 있습니다.",
+        },
+        rebalancing_recommendations=recommendations,
+        market_commentary="AI 응답 검증 실패로 상세 시장 코멘트 대신 기본 안내를 제공합니다.",
+        cautions=[
+            "투자는 원금 손실 가능성이 있습니다.",
+            "과거 수익률이 미래를 보장하지 않습니다.",
+            "정기적인 포트폴리오 점검을 권장합니다.",
+        ],
+    )
+
+
 def _parse_ai_results(
     diagnosis_raw: str,
     rebalancing_raw: str,
@@ -285,25 +325,29 @@ def _parse_ai_results(
             for a in portfolio.allocations
         ]
 
-    return AIContent(
-        portfolio_diagnosis=diagnosis.get("diagnosis", "포트폴리오 분석을 완료하였습니다."),
-        strengths=diagnosis.get("strengths", ["다양한 자산 보유", "꾸준한 적립 계획", "장기 투자 관점"]),
-        weaknesses=diagnosis.get("weaknesses", ["집중도 점검 필요", "리밸런싱 주기 설정 권장", "인플레이션 대응 자산 검토"]),
-        risk_score=int(diagnosis.get("risk_score", 50)),
-        risk_grade=diagnosis.get("risk_grade", "중립형"),
-        scenario_commentary={
-            "bear": diagnosis.get("bear_commentary", "글로벌 경기 침체 또는 금리 급등 시 발생 가능한 시나리오입니다."),
-            "base": diagnosis.get("base_commentary", "현재 시장 상황이 지속될 경우의 예상 결과입니다."),
-            "bull": diagnosis.get("bull_commentary", "경기 회복 및 금리 인하 시 발생 가능한 긍정적 시나리오입니다."),
-        },
-        rebalancing_recommendations=rebalancing.get("recommendations", []),
-        market_commentary=market.get("market_commentary", "현재 시장은 고금리 환경이 지속되고 있어 채권 및 현금성 자산의 매력도가 높아진 상황입니다."),
-        cautions=market.get("cautions", [
-            "투자는 원금 손실 가능성이 있습니다.",
-            "과거 수익률이 미래를 보장하지 않습니다.",
-            "정기적인 포트폴리오 점검을 권장합니다.",
-        ]),
-    )
+    try:
+        return AIContent(
+            portfolio_diagnosis=diagnosis.get("diagnosis", "포트폴리오 분석을 완료하였습니다."),
+            strengths=diagnosis.get("strengths", ["다양한 자산 보유", "꾸준한 적립 계획", "장기 투자 관점"]),
+            weaknesses=diagnosis.get("weaknesses", ["집중도 점검 필요", "리밸런싱 주기 설정 권장", "인플레이션 대응 자산 검토"]),
+            risk_score=_safe_int(diagnosis.get("risk_score", 50)),
+            risk_grade=diagnosis.get("risk_grade", "중립형"),
+            scenario_commentary={
+                "bear": diagnosis.get("bear_commentary", "글로벌 경기 침체 또는 금리 급등 시 발생 가능한 시나리오입니다."),
+                "base": diagnosis.get("base_commentary", "현재 시장 상황이 지속될 경우의 예상 결과입니다."),
+                "bull": diagnosis.get("bull_commentary", "경기 회복 및 금리 인하 시 발생 가능한 긍정적 시나리오입니다."),
+            },
+            rebalancing_recommendations=rebalancing.get("recommendations", []),
+            market_commentary=market.get("market_commentary", "현재 시장은 고금리 환경이 지속되고 있어 채권 및 현금성 자산의 매력도가 높아진 상황입니다."),
+            cautions=market.get("cautions", [
+                "투자는 원금 손실 가능성이 있습니다.",
+                "과거 수익률이 미래를 보장하지 않습니다.",
+                "정기적인 포트폴리오 점검을 권장합니다.",
+            ]),
+        )
+    except Exception as e:
+        logger.warning(f"AI 응답 최종 검증 실패 — fallback AIContent 사용: {e}")
+        return _fallback_ai_content(portfolio)
 
 
 def _extract_json(text: str) -> str:
