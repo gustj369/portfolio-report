@@ -199,7 +199,7 @@ function CompletePageContent() {
 
           if (status.status === "ready" && status.download_url) {
             // 백엔드가 내려준 download_url을 우선 사용하고, 상대 경로는 api.ts에서 API_URL 접두어 처리
-            const resolvedUrl = getDownloadUrl(token, status.download_url);
+            const resolvedUrl = getDownloadUrl(token);
             sessionStorage.removeItem(`rpt_${orderId}`);
             if (isCancelled) return; // 언마운트 후 상태 업데이트 방어
             setDownloadUrl(resolvedUrl);
