@@ -4,7 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useInput } from "@/context/InputContext";
-import { confirmPayment, generateReport, getReportStatus, getDownloadUrl } from "@/lib/api";
+import { confirmPayment, generateReport, getReportStatus, resolveDownloadUrl } from "@/lib/api";
 import type { ApiError, ReportStatus } from "@/types/portfolio";
 
 const STATUS_MESSAGES: Record<ReportStatus, string> = {
@@ -198,8 +198,9 @@ function CompletePageContent() {
           if (status.status === "generating") setCurrentStep(Math.min(2 + Math.floor(attempts / 5), 4));
 
           if (status.status === "ready" && status.download_url) {
-            // 백엔드가 내려준 download_url을 우선 사용하고, 상대 경로는 api.ts에서 API_URL 접두어 처리
-            const resolvedUrl = getDownloadUrl(token);
+            // 백엔드가 내려준 download_url을 절대 URL로 변환:
+            // 외부 절대 URL(S3 presigned)은 그대로, 상대 경로(R2 프록시·로컬)는 API_URL 접두어 추가
+            const resolvedUrl = resolveDownloadUrl(status.download_url);
             sessionStorage.removeItem(`rpt_${orderId}`);
             if (isCancelled) return; // 언마운트 후 상태 업데이트 방어
             setDownloadUrl(resolvedUrl);

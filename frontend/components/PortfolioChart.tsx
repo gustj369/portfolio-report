@@ -33,12 +33,15 @@ export default function PortfolioChart({ allocations, size = 180 }: PortfolioCha
   const cy = size / 2;
 
   const describeArc = (start: number, end: number) => {
+    // 단일 자산 100% 케이스: start === end(=360)이면 SVG arc가 점으로 렌더링됨.
+    // end를 start + 359.99로 clamp하여 완전한 원호로 표시.
+    const clampedEnd = Math.min(end, start + 359.99);
     const toRad = (deg: number) => ((deg - 90) * Math.PI) / 180;
     const x1 = cx + radius * Math.cos(toRad(start));
     const y1 = cy + radius * Math.sin(toRad(start));
-    const x2 = cx + radius * Math.cos(toRad(end));
-    const y2 = cy + radius * Math.sin(toRad(end));
-    const largeArc = end - start > 180 ? 1 : 0;
+    const x2 = cx + radius * Math.cos(toRad(clampedEnd));
+    const y2 = cy + radius * Math.sin(toRad(clampedEnd));
+    const largeArc = clampedEnd - start > 180 ? 1 : 0;
     return `M ${cx} ${cy} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} Z`;
   };
 

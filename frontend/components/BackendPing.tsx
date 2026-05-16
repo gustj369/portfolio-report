@@ -13,7 +13,12 @@ export default function BackendPing() {
     // 같은 브라우저 세션 내 중복 ping 방지 (hard reload 반복 요청 억제)
     if (sessionStorage.getItem("backend_pinged")) return;
     sessionStorage.setItem("backend_pinged", "1");
-    fetch(`${API_URL}/health`).catch(() => {});
+    fetch(`${API_URL}/health`).catch((err) => {
+      // 개발 모드에서는 백엔드 미연결 상황을 콘솔에 노출
+      if (process.env.NODE_ENV === "development") {
+        console.warn(`[BackendPing] 백엔드 연결 실패 (${API_URL}/health):`, err);
+      }
+    });
   }, []);
 
   return null;

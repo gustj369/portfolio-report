@@ -15,6 +15,7 @@ import httpx
 from config import get_settings, Settings
 from models.portfolio import AnalyzeRequest
 from services.storage import storage_set, storage_get, storage_delete
+from services.payment_store import _CONFIRMED_PFX
 
 router = APIRouter(prefix="/payment", tags=["payment"])
 logger = logging.getLogger(__name__)
@@ -23,7 +24,7 @@ TOSS_CONFIRM_URL = "https://api.tosspayments.com/v1/payments/confirm"
 
 # 스토리지 키 접두사
 _PENDING_PFX = "pay:pending:"
-_CONFIRMED_PFX = "pay:confirmed:"
+# _CONFIRMED_PFX 는 services/payment_store.py 에서 import (report 라우터와 공유)
 _IDEMPOTENCY_PFX = "pay:idempotency:"  # 중복 confirm 방지 (order_id → report_token)
 
 
@@ -94,6 +95,40 @@ async def request_payment(
         client_key=settings.toss_client_key,
         is_free=settings.report_price_krw == 0,
     )
+
+
+def _commit_payment(
+    order_id: str,
+    payment_key: str,
+    amount: int,
+    analyze_request: dict,
+    t0: float,
+) -> str:
+    """
+    결제 확인 완료 공통 처리 — confirm·free-confirm 양쪽에서 호출.
+    report_token 생성 → pending 삭제 → confirmed·idempotency 저장 → token 반환.
+    """
+    report_token = f"rpt_{uuid.uuid4().hex}"
+    storage_delete(f"{_PENDING_PFX}{order_id}")
+    storage_set(
+        f"{_CONFIRMED_PFX}{report_token}",
+        {
+            "order_id": order_id,
+            "payment_key": payment_key,
+            "amount": amount,
+            "analyze_request": analyze_request,
+            "confirmed_at": datetime.now(KST).isoformat(),
+        },
+        ttl=86400 * 7,  # 7일 보관
+    )
+    # 멱등성 키 저장 — 7일 동안 동일 order_id로 재요청 시 같은 토큰 반환
+    storage_set(
+        f"{_IDEMPOTENCY_PFX}{order_id}",
+        {"report_token": report_token},
+        ttl=86400 * 7,
+    )
+    logger.info(f"결제 스토리지 저장 완료: {order_id} → {report_token} ({time.perf_counter() - t0:.2f}s)")
+    return report_token
 
 
 @router.post("/confirm", response_model=PaymentConfirmResponse)
@@ -176,26 +211,13 @@ async def confirm_payment(
         logger.warning(f"토스 시크릿 키 없음 — 개발 모드로 결제 승인: {body.order_id} ({time.perf_counter() - t0:.2f}s)")
 
     # 결제 확인 완료 처리
-    report_token = f"rpt_{uuid.uuid4().hex}"
-    storage_delete(f"{_PENDING_PFX}{body.order_id}")
-    storage_set(
-        f"{_CONFIRMED_PFX}{report_token}",
-        {
-            "order_id": body.order_id,
-            "payment_key": body.payment_key,
-            "amount": body.amount,
-            "analyze_request": pending["analyze_request"],
-            "confirmed_at": datetime.now(KST).isoformat(),
-        },
-        ttl=86400 * 7,  # 7일 보관
+    report_token = _commit_payment(
+        order_id=body.order_id,
+        payment_key=body.payment_key,
+        amount=body.amount,
+        analyze_request=pending["analyze_request"],
+        t0=t0,
     )
-    # 멱등성 키 저장 — 7일 동안 동일 order_id로 재요청 시 같은 토큰 반환
-    storage_set(
-        f"{_IDEMPOTENCY_PFX}{body.order_id}",
-        {"report_token": report_token},
-        ttl=86400 * 7,
-    )
-    logger.info(f"결제 스토리지 저장 완료: {body.order_id} → {report_token} ({time.perf_counter() - t0:.2f}s)")
 
     logger.info(f"결제 승인 완료: {body.order_id} → {report_token} (총 {time.perf_counter() - t0:.2f}s)")
 
@@ -232,25 +254,13 @@ async def free_confirm(body: FreeConfirmInput) -> PaymentConfirmResponse:
             detail="이 엔드포인트는 무료(0원) 결제 전용입니다. 유료 결제는 /payment/confirm을 사용하세요.",
         )
 
-    report_token = f"rpt_{uuid.uuid4().hex}"
-    storage_delete(f"{_PENDING_PFX}{body.order_id}")
-    storage_set(
-        f"{_CONFIRMED_PFX}{report_token}",
-        {
-            "order_id": body.order_id,
-            "payment_key": "",
-            "amount": 0,
-            "analyze_request": pending["analyze_request"],
-            "confirmed_at": datetime.now(KST).isoformat(),
-        },
-        ttl=86400 * 7,
+    report_token = _commit_payment(
+        order_id=body.order_id,
+        payment_key="",
+        amount=0,
+        analyze_request=pending["analyze_request"],
+        t0=t0,
     )
-    storage_set(
-        f"{_IDEMPOTENCY_PFX}{body.order_id}",
-        {"report_token": report_token},
-        ttl=86400 * 7,
-    )
-    logger.info(f"무료 결제 스토리지 저장 완료: {body.order_id} → {report_token} ({time.perf_counter() - t0:.2f}s)")
 
     logger.info(f"무료 결제 확인 완료: {body.order_id} → {report_token} (총 {time.perf_counter() - t0:.2f}s)")
 
@@ -275,6 +285,4 @@ async def get_payment_status(order_id: str) -> PaymentStatusResponse:
     return PaymentStatusResponse(order_id=order_id, status="unknown")
 
 
-def get_confirmed_payment(report_token: str) -> dict | None:
-    """report_token으로 승인된 결제 조회 (내부 서비스 함수)"""
-    return storage_get(f"{_CONFIRMED_PFX}{report_token}")
+# get_confirmed_payment 는 services/payment_store.py 로 이동 (라우터 간 직접 import 제거)

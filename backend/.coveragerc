@@ -1,0 +1,13 @@
+[run]
+# 테스트 파일·대화형 스크립트·폰트 다운로드 스크립트는 측정 제외
+omit =
+    test_*.py
+    conftest.py
+    test_pipeline.py
+    download_fonts.py
+
+[report]
+# 실행 불가 표준 패턴 제외 (커버리지 수치 왜곡 방지)
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:

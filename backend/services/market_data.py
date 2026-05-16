@@ -4,6 +4,7 @@ Yahoo Finance + FRED API 기반
 """
 import yfinance as yf
 import requests
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 # PDF에 표시되는 데이터 기준일은 KST(UTC+9)로 고정
@@ -143,47 +144,57 @@ MARKET_DEFAULTS: dict[str, float] = {
 }
 
 
+def _fetch_yf_ticker(ticker: str) -> float | None:
+    """Yahoo Finance 티커 최신 Close 가격 반환. 실패 시 None. (ThreadPoolExecutor에서 실행)"""
+    try:
+        t = yf.Ticker(ticker)
+        hist = t.history(period="1mo")
+        if hist.empty:
+            logger.warning(f"시장 데이터 빈 응답 ({ticker}) — 건너뜀")
+            return None
+        close_data = hist["Close"].dropna()
+        if close_data.empty:
+            logger.warning(f"시장 데이터 Close 컬럼 비어있음 ({ticker}) — 건너뜀")
+            return None
+        return float(close_data.iloc[-1])
+    except Exception as e:
+        logger.warning(f"시장 데이터 수집 실패 ({ticker}): {e}")
+        return None
+
+
 def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
     """현재 시장 데이터 스냅샷 수집"""
     data = dict(MARKET_DEFAULTS)
 
-    # Yahoo Finance에서 시장 지수 수집
-    for key, ticker in MARKET_TICKERS.items():
-        try:
-            t = yf.Ticker(ticker)
-            hist = t.history(period="1mo")
-            if not hist.empty:
-                close_data = hist["Close"].dropna()
-                if close_data.empty:
-                    logger.warning(f"시장 데이터 Close 컬럼 비어있음 ({ticker}) — 건너뜀")
-                    continue
-                price = float(close_data.iloc[-1])
-                if key == "sp500":
-                    # S&P 500: 합리적 범위 체크 (1000~10000)
-                    if 1000 <= price <= 10000:
-                        data["sp500"] = price
-                elif key == "kospi":
-                    # KOSPI: 합리적 범위 체크 (1000~5000)
-                    if 1000 <= price <= 5000:
-                        data["kospi"] = price
-                    else:
-                        # fast_info fallback
-                        try:
-                            fp = float(t.fast_info.last_price or 0)
-                            if 1000 <= fp <= 5000:
-                                data["kospi"] = fp
-                        except Exception:
-                            pass
-                elif key == "gold":
-                    data["gold_price"] = price
-                elif key == "usd_krw":
-                    # 환율: 합리적 범위 체크 (800~2000)
-                    if 800 <= price <= 2000:
-                        data["usd_krw"] = price
-            else:
-                logger.warning(f"시장 데이터 빈 응답 ({ticker}) — 건너뜀")
-        except Exception as e:
-            logger.warning(f"시장 데이터 수집 실패 ({ticker}): {e}")
+    # Yahoo Finance에서 시장 지수 병렬 수집 (4개 티커 동시 요청 — 순차 대비 최악 지연 ~120s → ~30s)
+    with ThreadPoolExecutor(max_workers=len(MARKET_TICKERS)) as executor:
+        yf_futures = {key: executor.submit(_fetch_yf_ticker, ticker) for key, ticker in MARKET_TICKERS.items()}
+        for key, fut in yf_futures.items():
+            price = fut.result()
+            if price is None:
+                continue
+            if key == "sp500":
+                # S&P 500: 합리적 범위 체크 (1000~10000)
+                if 1000 <= price <= 10000:
+                    data["sp500"] = price
+            elif key == "kospi":
+                # KOSPI: 합리적 범위 체크 (1000~5000)
+                if 1000 <= price <= 5000:
+                    data["kospi"] = price
+                else:
+                    # 범위 밖: fast_info fallback (추가 KOSPI fallback 체인은 하단에서 처리)
+                    try:
+                        fp = float(yf.Ticker("^KS11").fast_info.last_price or 0)
+                        if 1000 <= fp <= 5000:
+                            data["kospi"] = fp
+                    except Exception:
+                        pass
+            elif key == "gold":
+                data["gold_price"] = price
+            elif key == "usd_krw":
+                # 환율: 합리적 범위 체크 (800~2000)
+                if 800 <= price <= 2000:
+                    data["usd_krw"] = price
 
     # KOSPI 다중 fallback (history가 비어있거나 환경 문제로 실패 시)
     if data["kospi"] == 2500.0:
@@ -403,25 +414,35 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
             f"해당 지표 관련 시뮬레이션 결과에 영향이 있을 수 있습니다."
         )
 
-    # FRED API에서 금리/CPI 수집
+    # FRED API에서 금리/CPI 병렬 수집 (2개 시리즈 동시 요청 — 순차 대비 최악 지연 ~20s → ~10s)
     if fred_api_key:
-        for key, series_id in FRED_SERIES.items():
+        def _fetch_fred_series(key: str, series_id: str) -> tuple[str, float | None]:
             try:
-                url = f"https://api.stlouisfed.org/fred/series/observations"
-                params = {
-                    "series_id": series_id,
-                    "api_key": fred_api_key,
-                    "file_type": "json",
-                    "sort_order": "desc",
-                    "limit": 1,
-                }
-                resp = requests.get(url, params=params, timeout=10)
+                resp = requests.get(
+                    "https://api.stlouisfed.org/fred/series/observations",
+                    params={
+                        "series_id": series_id,
+                        "api_key": fred_api_key,
+                        "file_type": "json",
+                        "sort_order": "desc",
+                        "limit": 1,
+                    },
+                    timeout=10,
+                )
                 if resp.status_code == 200:
                     obs = resp.json().get("observations", [])
                     if obs and obs[0]["value"] != ".":
-                        data[key] = float(obs[0]["value"])
+                        return key, float(obs[0]["value"])
             except Exception as e:
                 logger.warning(f"FRED 데이터 수집 실패 ({series_id}): {e}")
+            return key, None
+
+        with ThreadPoolExecutor(max_workers=len(FRED_SERIES)) as executor:
+            fred_futures = {key: executor.submit(_fetch_fred_series, key, sid) for key, sid in FRED_SERIES.items()}
+            for key, fut in fred_futures.items():
+                _, value = fut.result()
+                if value is not None:
+                    data[key] = value
 
     return MarketSnapshot(
         sp500=data["sp500"],
@@ -471,9 +492,10 @@ def _adjust_return_for_market(
     """시장 상황에 따른 수익률 조정"""
     adjusted = base_return
 
-    # 고금리 환경 (US 10Y > _HIGH_RATE_THRESHOLD): 채권/현금 상향, 주식 소폭 하향
+    # 고금리 환경 (US 10Y > _HIGH_RATE_THRESHOLD): 채권/단기채권 상향, 주식 소폭 하향
+    # CASH는 아래 블록에서 kr_base_rate로 직접 설정하므로 여기서 boost를 적용하지 않음
     if market.us_10y_yield > _HIGH_RATE_THRESHOLD:
-        if asset_type in (AssetType.BOND, AssetType.CASH):
+        if asset_type in (AssetType.BOND, AssetType.SHORT_BOND):
             adjusted += _HIGH_RATE_BOND_BOOST
         elif asset_type in (AssetType.FOREIGN_STOCK, AssetType.DOMESTIC_STOCK):
             adjusted -= _HIGH_RATE_STOCK_DRAG
@@ -482,9 +504,9 @@ def _adjust_return_for_market(
     if asset_type == AssetType.CASH:
         adjusted = market.kr_base_rate / 100
 
-    # 인플레이션 조정 (실질 수익률)
+    # 인플레이션 조정 (실질 수익률) — 채권·단기채권·현금 모두 적용
     inflation_rate = market.cpi_us / 100
-    if asset_type in (AssetType.BOND, AssetType.CASH):
+    if asset_type in (AssetType.BOND, AssetType.SHORT_BOND, AssetType.CASH):
         adjusted = max(adjusted - inflation_rate * _INFLATION_IMPACT_FACTOR, _MIN_REAL_RETURN)
 
     return adjusted
