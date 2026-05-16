@@ -5,7 +5,7 @@ import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useInput } from "@/context/InputContext";
 import { confirmPayment, generateReport, getReportStatus, getDownloadUrl } from "@/lib/api";
-import type { ReportStatus } from "@/types/portfolio";
+import type { ApiError, ReportStatus } from "@/types/portfolio";
 
 const STATUS_MESSAGES: Record<string, string> = {
   pending: "리포트 생성 준비 중...",
@@ -124,7 +124,7 @@ function CompletePageContent() {
             if (isCancelled) return; // confirm 실패 전 언마운트 방어
             // 결제 확인 실패: HTTP 상태에 따라 errorCode 분기
             // 503(Toss 서버 연결 오류)은 재시도 안내, 그 외(만료·금액 불일치 등)는 처음부터 안내
-            const httpStatus = (e as any).httpStatus;
+            const httpStatus = (e as ApiError).httpStatus;
             setPhase("error");
             setErrorCode(httpStatus === 503 ? "server" : "payment");
             setErrorMsg(e instanceof Error ? e.message : "결제 확인 중 오류가 발생했습니다.");
@@ -176,7 +176,7 @@ function CompletePageContent() {
             status = await getReportStatus(token);
           } catch (e) {
             // 404: 리포트 레코드 없음 → 토큰 만료(7일) 또는 잘못된 토큰
-            if (e instanceof Error && (e as any).httpStatus === 404) {
+            if (e instanceof Error && (e as ApiError).httpStatus === 404) {
               sessionStorage.removeItem(`rpt_${orderId}`);
               if (isCancelled) return; // 언마운트 후 상태 업데이트 방어
               setErrorCode("expired");

@@ -2,6 +2,7 @@ import type {
   AnalyzeRequest,
   ApiError,
   GenerateReportResponse,
+  PaymentConfirmParams,
   PaymentConfirmResponse,
   PaymentRequestResponse,
   PreviewResponse,
@@ -40,11 +41,7 @@ export async function requestPayment(analyzeRequest: AnalyzeRequest): Promise<Pa
   });
 }
 
-export async function confirmPayment(params: {
-  payment_key: string;
-  order_id: string;
-  amount: number;
-}): Promise<PaymentConfirmResponse> {
+export async function confirmPayment(params: PaymentConfirmParams): Promise<PaymentConfirmResponse> {
   return apiFetch<PaymentConfirmResponse>("/payment/confirm", {
     method: "POST",
     body: JSON.stringify(params),
