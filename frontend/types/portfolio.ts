@@ -77,3 +77,26 @@ export interface ReportStatusResponse {
   download_url?: string;
   error_message?: string;
 }
+
+export interface ApiError extends Error {
+  httpStatus: number;
+}
+
+export interface PaymentRequestResponse {
+  order_id: string;
+  amount: number;
+  client_key: string;
+  is_free: boolean;
+}
+
+export interface PaymentConfirmResponse {
+  success: boolean;
+  report_token: string;
+  message: string;
+}
+
+export interface GenerateReportResponse {
+  report_token: string;
+  status: string;
+  message: string;
+}
