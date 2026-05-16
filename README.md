@@ -78,7 +78,7 @@ python test_pipeline.py
 | `S3_BUCKET` | S3 버킷명 | S3 사용 시 |
 | `USE_LOCAL_STORAGE` | `true` = 로컬 저장 (개발) | 기본 true |
 | `FRONTEND_URL` | 프론트엔드 URL (CORS 허용) | 배포 시 필수 |
-| `REPORT_PRICE_KRW` | 리포트 가격 (원) | 기본 4900 |
+| `REPORT_PRICE_KRW` | 리포트 가격 (원) | 기본 0 |
 | `SMTP_HOST` | SMTP 서버 호스트 | 이메일 발송 시 |
 | `SMTP_PORT` | SMTP 포트 | 기본 587 |
 | `SMTP_USER` | SMTP 사용자 | 이메일 발송 시 |
@@ -146,6 +146,8 @@ npx vercel --prod
 ## 로컬 문제 해결
 
 Python 실행 경로, Git 전역 ignore 권한 경고, Toss 결제 모듈 로드 실패는 아래를 참고하세요.
+
+결제 승인 후 저장 실패나 리포트 생성 재요청 같은 운영 복구 절차는 `recover_payment_order.py`를 다루는 [RECOVERY.md](./RECOVERY.md)를 참고하세요.
 
 ---
 
