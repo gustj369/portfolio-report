@@ -5,7 +5,10 @@
 """
 import pytest
 from datetime import datetime, timezone
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
+
+import httpx
+from google.genai.errors import ClientError, APIError
 
 from models.portfolio import (
     Portfolio, Allocation, AssetType,
@@ -16,6 +19,7 @@ from services.market_data import MARKET_DEFAULTS
 from services.ai_engine import (
     _extract_json, _parse_ai_results,
     generate_preview_summary, generate_full_analysis,
+    _call_gemini,
 )
 
 
@@ -179,3 +183,55 @@ class TestGenerateFullAnalysis:
         assert result.rebalancing_recommendations[0].asset_name == "주식"
         assert result.market_commentary == "고금리 지속"
         assert len(result.cautions) == 2
+
+
+# ── _call_gemini 재시도 분기 ──────────────────────────────────────────────────
+
+_RATE_LIMIT_EXC = ClientError(
+    429,
+    {"error": {"code": 429, "message": "quota exceeded", "status": "RESOURCE_EXHAUSTED"}},
+)
+_TIMEOUT_EXC = httpx.TimeoutException("read timed out")
+_API_ERR_EXC = APIError(
+    500,
+    {"error": {"code": 500, "message": "internal error", "status": "INTERNAL"}},
+)
+
+
+class TestCallGemini:
+    """_call_gemini의 재시도·예외 분기를 time.sleep mock으로 순간 실행"""
+
+    def _make_client(self, side_effects: list):
+        """generate_content가 순서대로 side_effect를 반환하는 mock client"""
+        client = MagicMock()
+        client.models.generate_content.side_effect = side_effects
+        return client
+
+    def test_rate_limit_exhausted_raises(self):
+        """429 rate limit이 3회 연속으로 발생하면 예외를 전파해야 한다"""
+        client = self._make_client([_RATE_LIMIT_EXC, _RATE_LIMIT_EXC, _RATE_LIMIT_EXC])
+
+        with patch("services.ai_engine.time.sleep"), \
+             pytest.raises(ClientError) as exc_info:
+            _call_gemini(client, "test prompt")
+
+        assert exc_info.value.code == 429
+
+    def test_timeout_exhausted_raises(self):
+        """timeout이 3회 연속으로 발생하면 예외를 전파해야 한다"""
+        client = self._make_client([_TIMEOUT_EXC, _TIMEOUT_EXC, _TIMEOUT_EXC])
+
+        with patch("services.ai_engine.time.sleep"), \
+             pytest.raises(httpx.TimeoutException):
+            _call_gemini(client, "test prompt")
+
+    def test_api_error_then_success_returns_text(self):
+        """일반 API 오류 1회 후 성공하면 응답 텍스트를 반환해야 한다"""
+        ok_response = MagicMock()
+        ok_response.text = "정상 응답"
+        client = self._make_client([_API_ERR_EXC, ok_response])
+
+        with patch("services.ai_engine.time.sleep"):
+            result = _call_gemini(client, "test prompt")
+
+        assert result == "정상 응답"
