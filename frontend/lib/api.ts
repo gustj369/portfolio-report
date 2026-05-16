@@ -6,6 +6,10 @@ import type {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+interface ApiError extends Error {
+  httpStatus: number;
+}
+
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     headers: { "Content-Type": "application/json" },
@@ -14,8 +18,8 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: res.statusText }));
-    const err = new Error(error.detail || `API 오류: ${res.status}`);
-    (err as any).httpStatus = res.status;
+    const err = new Error(error.detail || `API 오류: ${res.status}`) as ApiError;
+    err.httpStatus = res.status;
     throw err;
   }
 
