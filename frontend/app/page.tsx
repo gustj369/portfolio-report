@@ -56,7 +56,7 @@ export default function LandingPage() {
           </div>
 
           <p className="mt-4 text-sm text-blue-200">
-            미리보기는 무료 · 전체 리포트 <strong className="text-gold-400">4,900원</strong>
+            미리보기 무료 · 전체 리포트 <strong className="text-gold-400">무료</strong>
           </p>
         </div>
       </section>
@@ -106,9 +106,9 @@ export default function LandingPage() {
           <div className="card border-2 border-gold-400 text-center">
             <div className="text-sm text-gray-500 mb-1">기본 리포트</div>
             <div className="text-5xl font-bold text-navy mb-1">
-              4,900<span className="text-2xl">원</span>
+              무료
             </div>
-            <div className="text-sm text-gold-500 mb-6">커피 한 잔 값에 AI 재무 설계</div>
+            <div className="text-sm text-gold-500 mb-6">지금 바로 무료로 이용하세요</div>
             <ul className="text-left space-y-2 mb-6">
               {[
                 "5페이지 전문 PDF 리포트",
@@ -145,6 +145,12 @@ export default function LandingPage() {
         >
           무료로 미리보기 시작 →
         </Link>
+      </section>
+
+      {/* 협업 문의 및 후원 */}
+      <section className="py-10 px-4 bg-gray-50 text-center">
+        <p className="text-sm font-semibold text-gray-700 mb-2">협업 문의 및 후원 계좌</p>
+        <p className="text-sm text-gray-600">카카오페이증권 계좌 번호: 02005793329</p>
       </section>
 
       {/* 면책 고지 */}
