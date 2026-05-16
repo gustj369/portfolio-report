@@ -149,6 +149,8 @@ Python 실행 경로, Git 전역 ignore 권한 경고, Toss 결제 모듈 로드
 
 결제 승인 후 저장 실패나 리포트 생성 재요청 같은 운영 복구 절차는 `recover_payment_order.py`를 다루는 [RECOVERY.md](./RECOVERY.md)를 참고하세요.
 
+결제 승인 후 저장 실패나 리포트 생성 재요청 같은 운영 복구 절차는 `recover_payment_order.py`를 다루는 [RECOVERY.md](./RECOVERY.md)를 참고하세요.
+
 ---
 
 ## 파일 구조
