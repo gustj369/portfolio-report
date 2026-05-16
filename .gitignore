@@ -34,4 +34,9 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# Claude Code worktrees / session artifacts
+.claude/
+
+# TypeScript build info
 frontend/tsconfig.tsbuildinfo
