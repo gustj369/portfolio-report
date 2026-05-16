@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     aws_secret_access_key: str = ""
     aws_region: str = "ap-northeast-2"
     s3_bucket: str = "portfolio-reports"
-    report_price_krw: int = 4900
+    report_price_krw: int = 0
     frontend_url: str = "http://localhost:3000"
     use_local_storage: bool = True  # S3 대신 로컬 저장 (개발용)
 
@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_password: str = ""
     smtp_from: str = ""           # 발신자 주소 (미설정 시 smtp_user 사용)
+
+    # 운영 알림 웹훅 (선택 — Slack Incoming Webhook 등 JSON {"text": "..."} 수신 URL)
+    admin_alert_webhook_url: str = ""
+
+    # Sentry 오류 보고 (선택 — sentry-sdk 설치 및 DSN 설정 시 활성화)
+    sentry_dsn: str = ""
 
     # pydantic-settings v2 정식 설정 방식 (class Config 스타일은 v2에서 deprecated)
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")

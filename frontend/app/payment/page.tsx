@@ -132,7 +132,9 @@ export default function PaymentPage() {
       } else if (isRealTossKey) {
         // 실제 Toss 키인데 SDK가 로드되지 않은 경우 → 오류 표시 (개발 모드로 우회하지 않음)
         if (typeof window.TossPayments === "undefined") {
-          setError("결제 모듈을 불러오지 못했습니다. 아래 버튼으로 다시 불러온 뒤 결제를 시도해주세요.");
+          const nextCount = 1;
+          setTossRetryCount(nextCount);
+          setError(getTossLoadError(nextCount));
           setIsLoading(false);
           return;
         }
@@ -162,11 +164,12 @@ export default function PaymentPage() {
 
   if (!previewResponse) return null;
 
-  const canRetryPage = !orderId || tossRetryCount > 0;
-  const tossTroubleshootingItems = tossRetryCount > 0
+  const canRetryPage = !orderId || tossRetryCount > 0 || error.includes("결제 모듈");
+  const visibleTossRetryCount = tossRetryCount > 0 ? tossRetryCount : 1;
+  const tossTroubleshootingItems = canRetryPage && orderId
     ? typeof navigator !== "undefined" && !navigator.onLine
       ? ["인터넷 연결이 온라인 상태인지 확인", "연결 복구 후 결제 모듈 다시 불러오기"]
-      : tossRetryCount >= 2
+      : visibleTossRetryCount >= 2
       ? ["광고 차단 또는 보안 확장 프로그램 잠시 끄기", "회사/학교/공용 네트워크의 CDN 차단 여부 확인", "다른 브라우저나 다른 네트워크에서 다시 시도"]
       : ["잠시 후 결제 모듈 다시 불러오기", "계속 실패하면 네트워크 상태 확인"]
     : [];
@@ -187,7 +190,7 @@ export default function PaymentPage() {
       <div className="min-h-screen bg-gray-50 py-8 px-4 flex items-center justify-center">
         <div className="w-full max-w-md">
           <div className="card">
-            <h1 className="section-title text-center mb-6">결제</h1>
+            <h1 className="section-title text-center mb-6">{isFree ? "리포트 받기" : "결제"}</h1>
 
             {/* 주문 요약 */}
             <div className="bg-navy text-white rounded-xl p-5 mb-6">
@@ -279,9 +282,11 @@ export default function PaymentPage() {
               </button>
             </div>
 
-            <p className="text-xs text-gray-400 text-center mt-4">
-              토스페이먼츠 보안 결제 · SSL 암호화
-            </p>
+            {!isFree && (
+              <p className="text-xs text-gray-400 text-center mt-4">
+                토스페이먼츠 보안 결제 · SSL 암호화
+              </p>
+            )}
           </div>
         </div>
       </div>
