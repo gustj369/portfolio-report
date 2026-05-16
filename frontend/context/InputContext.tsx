@@ -38,9 +38,9 @@ const DEFAULT_STATE: InputState = {
     total_asset: 1000,
     monthly_saving: 50,
     allocations: [
-      { asset_name: "S&P500 ETF", asset_type: "해외주식" as AssetType, weight: 50 },
-      { asset_name: "국내 주식", asset_type: "국내주식" as AssetType, weight: 30 },
-      { asset_name: "예금/채권", asset_type: "채권" as AssetType, weight: 20 },
+      { asset_name: "S&P500 ETF", asset_type: "해외주식", weight: 50 },
+      { asset_name: "국내 주식", asset_type: "국내주식", weight: 30 },
+      { asset_name: "예금/채권", asset_type: "채권", weight: 20 },
     ],
   },
   previewResponse: null,
@@ -146,7 +146,7 @@ export function InputProvider({ children }: { children: ReactNode }) {
   };
 
   const reset = () => {
-    try { sessionStorage.removeItem(_STORAGE_KEY); } catch {}
+    try { sessionStorage.removeItem(_STORAGE_KEY); } catch { /* private mode 등 사용 불가 시 무시 */ }
     setState(DEFAULT_STATE);
   };
 
