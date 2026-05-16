@@ -8,7 +8,8 @@
 
 ```bash
 cd backend
-pip install -r requirements.txt
+pip install -r requirements.txt          # 프로덕션 의존성
+pip install -r requirements-dev.txt      # 개발·테스트 의존성 (pytest 등)
 
 # 환경 변수 설정
 cp .env.example .env
@@ -169,7 +170,8 @@ portfolio-report/
 │   │   └── email_service.py      # 이메일 발송 (SMTP)
 │   ├── assets/fonts/             # NotoSansKR 폰트 파일
 │   ├── generated_reports/        # 로컬 PDF 저장 (개발)
-│   ├── requirements.txt
+│   ├── requirements.txt          # 프로덕션 의존성
+│   ├── requirements-dev.txt      # 개발·테스트 의존성 (pytest)
 │   └── test_pipeline.py          # 파이프라인 테스트
 │
 └── frontend/
