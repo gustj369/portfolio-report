@@ -3,6 +3,7 @@
 네트워크 호출(Gemini API) 없이 핵심 분기를 검증한다.
 외부 의존(_call_gemini)은 unittest.mock으로 격리한다.
 """
+import logging
 import pytest
 from datetime import datetime, timezone
 from unittest.mock import patch, MagicMock
@@ -235,3 +236,14 @@ class TestCallGemini:
             result = _call_gemini(client, "test prompt")
 
         assert result == "정상 응답"
+
+    def test_rate_limit_exhausted_logs_error_message(self, caplog):
+        """rate limit 3회 소진 시 ERROR 레벨로 '3회 소진' 메시지가 기록되어야 한다"""
+        client = self._make_client([_RATE_LIMIT_EXC, _RATE_LIMIT_EXC, _RATE_LIMIT_EXC])
+
+        with patch("services.ai_engine.time.sleep"), \
+             caplog.at_level(logging.ERROR, logger="services.ai_engine"), \
+             pytest.raises(ClientError):
+            _call_gemini(client, "test prompt", label="테스트")
+
+        assert any("rate limit 3회 소진" in msg for msg in caplog.messages)
