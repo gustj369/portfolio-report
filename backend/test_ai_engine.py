@@ -247,3 +247,14 @@ class TestCallGemini:
             _call_gemini(client, "test prompt", label="테스트")
 
         assert any("rate limit 3회 소진" in msg for msg in caplog.messages)
+
+    def test_timeout_exhausted_logs_error_message(self, caplog):
+        """timeout 3회 소진 시 ERROR 레벨로 'timeout 최종 실패' 메시지가 기록되어야 한다"""
+        client = self._make_client([_TIMEOUT_EXC, _TIMEOUT_EXC, _TIMEOUT_EXC])
+
+        with patch("services.ai_engine.time.sleep"), \
+             caplog.at_level(logging.ERROR, logger="services.ai_engine"), \
+             pytest.raises(httpx.TimeoutException):
+            _call_gemini(client, "test prompt", label="테스트")
+
+        assert any("timeout 최종 실패" in msg for msg in caplog.messages)
