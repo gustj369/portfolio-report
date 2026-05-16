@@ -119,17 +119,21 @@ def _parse_stooq_close(
     return None
 
 
+# 시장 데이터 수집 실패 시 사용하는 fallback 기본값 (conftest.py 등 테스트에서도 사용)
+MARKET_DEFAULTS: dict[str, float] = {
+    "sp500": 5000.0,
+    "kospi": 2500.0,
+    "us_10y_yield": 4.3,
+    "kr_base_rate": 3.5,
+    "usd_krw": 1350.0,
+    "gold_price": 2300.0,
+    "cpi_us": 3.2,
+}
+
+
 def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
     """현재 시장 데이터 스냅샷 수집"""
-    data = {
-        "sp500": 5000.0,
-        "kospi": 2500.0,
-        "us_10y_yield": 4.3,
-        "kr_base_rate": 3.5,
-        "usd_krw": 1350.0,
-        "gold_price": 2300.0,
-        "cpi_us": 3.2,
-    }
+    data = dict(MARKET_DEFAULTS)
 
     # Yahoo Finance에서 시장 지수 수집
     for key, ticker in MARKET_TICKERS.items():
