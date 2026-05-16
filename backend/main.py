@@ -5,6 +5,7 @@ import logging
 
 from config import get_settings
 from routers import analyze, payment, report
+from services.observability import init_sentry
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
 logger = logging.getLogger(__name__)
@@ -37,6 +38,7 @@ app = FastAPI(
 )
 
 settings = get_settings()
+init_sentry(dsn=settings.sentry_dsn)
 
 # CORS 허용 오리진:
 #   - 환경변수 FRONTEND_URL: 프로덕션·Vercel 배포 URL을 명시적으로 지정 (권장)
