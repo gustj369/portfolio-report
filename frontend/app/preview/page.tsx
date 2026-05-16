@@ -7,8 +7,9 @@ import BlurSection from "@/components/BlurSection";
 import PortfolioChart from "@/components/PortfolioChart";
 import { useInput } from "@/context/InputContext";
 import { requestPayment, freeConfirmPayment } from "@/lib/api";
+import type { RiskTolerance } from "@/types/portfolio";
 
-const RISK_GRADE_COLORS: Record<string, string> = {
+const RISK_GRADE_COLORS: Record<RiskTolerance, string> = {
   안정형: "bg-green-500",
   중립형: "bg-yellow-500",
   공격형: "bg-red-500",

@@ -7,7 +7,7 @@ import { useInput } from "@/context/InputContext";
 import { confirmPayment, generateReport, getReportStatus, getDownloadUrl } from "@/lib/api";
 import type { ApiError, ReportStatus } from "@/types/portfolio";
 
-const STATUS_MESSAGES: Record<string, string> = {
+const STATUS_MESSAGES: Record<ReportStatus, string> = {
   pending: "리포트 생성 준비 중...",
   generating: "AI 분석 및 PDF 생성 중...",
   ready: "리포트 준비 완료!",
