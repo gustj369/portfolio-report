@@ -48,8 +48,8 @@ def _setup_font():
                 plt.rcParams["font.family"] = prop.get_name()
                 logger.info(f"차트 폰트 설정: {font_path}")
                 break
-            except Exception as e:
-                logger.warning(f"폰트 로드 실패 ({font_path}): {e}")
+            except OSError as e:
+                logger.warning(f"폰트 로드 실패 ({font_path}) [{type(e).__name__}]: {e}")
     else:
         # Windows 시스템 폰트명으로 직접 지정 시도
         plt.rcParams["font.family"] = ["Malgun Gothic", "Arial Unicode MS", "DejaVu Sans"]
@@ -235,23 +235,25 @@ def generate_stacked_bar_chart(
 
 def generate_rebalancing_comparison_chart(
     portfolio: Portfolio,
-    recommendations: list[dict],
+    recommendations: list,
 ) -> bytes:
-    """현재 비중 vs 추천 비중 비교 파이차트 (나란히)"""
+    """현재 비중 vs 추천 비중 비교 파이차트 (나란히)
+    recommendations: list[RebalancingRecommendation] — 속성 접근 사용
+    """
     current_labels = [a.asset_name for a in portfolio.allocations]
     current_sizes = [a.weight for a in portfolio.allocations]
 
-    # 추천 비중 데이터 정리 (기존 자산)
-    rec_map = {r["asset_name"]: r["recommended_weight"] for r in recommendations}
+    # 추천 비중 데이터 정리 (기존 자산) — 속성 접근
+    rec_map = {r.asset_name: r.recommended_weight for r in recommendations}
     rec_sizes = [rec_map.get(name, weight) for name, weight in zip(current_labels, current_sizes)]
 
     # 신규 편입 항목 추가 (추천 비중 차트에만 표시)
     new_rec_labels = list(current_labels)
     new_rec_sizes = list(rec_sizes)
     for r in recommendations:
-        if r["asset_name"] not in current_labels and r.get("recommended_weight", 0) > 0:
-            new_rec_labels.append(r["asset_name"])
-            new_rec_sizes.append(r["recommended_weight"])
+        if r.asset_name not in current_labels and r.recommended_weight > 0:
+            new_rec_labels.append(r.asset_name)
+            new_rec_sizes.append(r.recommended_weight)
 
     # 합계를 100으로 정규화
     rec_total = sum(new_rec_sizes)

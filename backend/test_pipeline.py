@@ -13,6 +13,7 @@ from models.portfolio import (
 )
 from services.market_data import fetch_market_snapshot
 from services.simulator import run_simulation, calculate_risk_score
+from services.fallback_analyzer import generate_personalized_content
 from services.chart_generator import (
     generate_portfolio_pie_chart,
     generate_projection_line_chart,
@@ -347,6 +348,54 @@ def _sample_data():
         ],
     )
     return user_profile, portfolio
+
+
+# ─────────────────────────────────────────────
+#  pytest 자동 검증 (python -m pytest 로 실행)
+#  _sample_data()는 네트워크 없이 순수 객체만 생성하므로 mock 불필요
+# ─────────────────────────────────────────────
+
+def test_sample_data_portfolio_weights_sum_to_100():
+    """샘플 포트폴리오 비중 합계가 100이어야 한다"""
+    _, portfolio = _sample_data()
+    total = sum(a.weight for a in portfolio.allocations)
+    assert abs(total - 100.0) < 0.1, f"비중 합계 오류: {total}"
+
+
+def test_sample_data_user_profile_is_valid():
+    """샘플 사용자 프로필 필드가 유효해야 한다"""
+    user_profile, _ = _sample_data()
+    assert user_profile.age > 0
+    assert user_profile.monthly_income > 0
+    assert user_profile.investment_period > 0
+
+
+def test_sample_data_allocations_are_nonempty():
+    """샘플 포트폴리오에 자산이 1개 이상 있어야 한다"""
+    _, portfolio = _sample_data()
+    assert len(portfolio.allocations) >= 1
+    for a in portfolio.allocations:
+        assert a.weight > 0, f"비중 0인 자산 발견: {a.asset_name}"
+
+
+def test_simulation_bear_base_bull_ordering(sample):
+    """비관 ≤ 기본 ≤ 낙관 순서로 최종 자산이 정렬되어야 한다"""
+    _, portfolio, market_snapshot = sample
+    result = run_simulation(portfolio, market_snapshot)
+    assert result.bear.final_value <= result.base.final_value
+    assert result.base.final_value <= result.bull.final_value
+
+
+def test_rebalancing_recommended_weights_sum_to_100(sample):
+    """리밸런싱 추천 비중 합계가 100%에 근접해야 한다"""
+    user_profile, portfolio, market_snapshot = sample
+    simulation = run_simulation(portfolio, market_snapshot)
+    risk_score, risk_grade = calculate_risk_score(portfolio, market_snapshot)
+    content = generate_personalized_content(
+        user_profile, portfolio, simulation, market_snapshot, risk_score, risk_grade
+    )
+    total = sum(r.recommended_weight for r in content.rebalancing_recommendations)
+    assert abs(total - 100.0) < 0.5, f"추천 비중 합계 오류: {total:.1f}%"
 
 
 if __name__ == "__main__":

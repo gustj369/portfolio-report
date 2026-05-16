@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
 
@@ -31,10 +31,10 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from: str = ""           # 발신자 주소 (미설정 시 smtp_user 사용)
 
-    class Config:
-        env_file = ".env"
+    # pydantic-settings v2 정식 설정 방식 (class Config 스타일은 v2에서 deprecated)
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 
-@lru_cache()
+@lru_cache
 def get_settings() -> Settings:
     return Settings()

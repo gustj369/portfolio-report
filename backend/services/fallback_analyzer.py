@@ -2,9 +2,34 @@
 Gemini API 없이 포트폴리오 데이터 기반으로 개인화된 분석 콘텐츠 생성
 """
 from models.portfolio import Portfolio, UserProfile, AssetType
-from models.report import AIContent, MarketSnapshot, SimulationResult
+from models.report import AIContent, MarketSnapshot, SimulationResult, RebalancingRecommendation
 from services.simulator import calculate_risk_score
 
+
+# 포트폴리오 구성 판단 임계값
+_RISKY_HEAVY_THRESHOLD = 70     # 위험자산 비중 이상 → "성장 중심" 판정
+_RISKY_BALANCED_THRESHOLD = 50  # 위험자산 비중 이상 → "균형형" 판정
+_RISKY_CAUTION_THRESHOLD = 60   # 위험자산 비중 이상 → 강점/주의사항 코멘트 트리거 (2곳 사용)
+_CONCENTRATION_THRESHOLD = 40   # 단일 자산 비중 이상 → 집중 위험 경고
+_CRYPTO_WARNING_THRESHOLD = 20  # 암호화폐 비중 이상 → 고변동성 경고
+_FOREIGN_STOCK_THRESHOLD = 20   # 해외주식 비중 이상 → 환율 리스크 코멘트 (2곳 사용)
+
+# 시장 지표 판단 임계값
+_RETIREMENT_AGE = 60            # 은퇴 나이 기준 (years_to_retire 계산용)
+_MIN_INVEST_YEARS = 10          # 투자 기간 최솟값
+_YOUNG_AGE_THRESHOLD = 40       # "젊은 나이" 강점 코멘트 기준
+_HIGH_RATE_YIELD = 4.5          # US 10Y 금리 이상 → 고금리 환경 코멘트
+_MID_RATE_YIELD = 3.5           # US 10Y 금리 이상 → 중립 환경 코멘트
+_HIGH_CPI_THRESHOLD = 3.0       # CPI 이상 → 인플레이션 경고 코멘트
+_FX_WEAK_KRW = 1400             # USD/KRW 이상 → 원화 약세 코멘트
+
+# 리밸런싱 추천 비중 클램핑 범위 (_generate_rebalancing 사용)
+_BOND_WEIGHT_MAX = 60.0       # 채권 추천 비중 상한
+_ALT_WEIGHT_MAX = 50.0        # 대안자산 추천 비중 상한
+_EQUITY_WEIGHT_MIN = 5.0      # 주식 추천 비중 하한
+_EQUITY_WEIGHT_MAX = 95.0     # 주식 추천 비중 상한
+_DIRECTION_THRESHOLD = 0.5    # 방향 판정 허용 오차 — 이 값 미만 변동은 "유지"로 분류
+_WEIGHT_CORRECTION_MIN = 0.1  # 비중 합계 보정 실행 임계 — 이 값 이상 오차 발생 시 보정
 
 # 리스크 성향별 목표 자산 배분 (%)
 _TARGET_ALLOC = {
@@ -73,16 +98,16 @@ def generate_personalized_content(
     max_alloc = max(portfolio.allocations, key=lambda a: a.weight)
 
     # ── 종합 진단 ─────────────────────────────────────────────────
-    years_to_retire = max(60 - age, 10)
+    years_to_retire = max(_RETIREMENT_AGE - age, _MIN_INVEST_YEARS)
 
     # 위험자산(주식+대안) 기준으로 포트폴리오 성격 판단
-    if risky_w >= 70:
+    if risky_w >= _RISKY_HEAVY_THRESHOLD:
         dominance = f"위험자산(주식·대안) {risky_w:.0f}%로 성장 중심"
         if risk_grade == "공격형":
             structure_comment = "장기 복리 수익을 극대화할 수 있는 공격적 구조입니다."
         else:
             structure_comment = "장기 복리 성장에 유리한 구조입니다."
-    elif risky_w >= 50:
+    elif risky_w >= _RISKY_BALANCED_THRESHOLD:
         dominance = f"위험자산 {risky_w:.0f}%·안전자산 {100 - risky_w:.0f}%의 균형형"
         structure_comment = "성장과 안정의 균형을 추구하는 구조입니다."
     else:
@@ -149,7 +174,7 @@ def generate_personalized_content(
     elif len(held_types) == 2:
         strengths.append(f"{held_types[0]}·{held_types[1]} 결합으로 수익성·안정성 동시 추구")
 
-    if risky_w >= 60 and age <= 40:
+    if risky_w >= _RISKY_CAUTION_THRESHOLD and age <= _YOUNG_AGE_THRESHOLD:
         strengths.append(f"{age}세 젊은 나이에 위험자산 {risky_w:.0f}% 보유로 장기 복리 성장 극대화 가능")
 
     if cash_w + bond_w >= 15:
@@ -167,14 +192,14 @@ def generate_personalized_content(
     # 단일 자산 집중 (비트코인 포함)
     max_w = max(a.weight for a in portfolio.allocations)
     max_name = next(a.asset_name for a in portfolio.allocations if a.weight == max_w)
-    if max_w >= 40:
+    if max_w >= _CONCENTRATION_THRESHOLD:
         weaknesses.append(f"'{max_name}' 단일 비중 {max_w:.0f}%로 집중 — 해당 자산 급락 시 전체 포트폴리오 영향 큼")
 
     # 암호화폐(비트코인/기타) 고변동성 경고
     crypto_allocs = [a for a in portfolio.allocations if a.asset_type in (AssetType.BITCOIN, AssetType.CRYPTO)]
     if crypto_allocs:
         crypto_w = sum(a.weight for a in crypto_allocs)
-        if crypto_w >= 20:
+        if crypto_w >= _CRYPTO_WARNING_THRESHOLD:
             weaknesses.append(
                 f"암호화폐 {crypto_w:.0f}% — 연 변동성 70~80%+ 자산으로 단기 50~70% 급락 가능성 존재, "
                 f"손실 감내 능력 충분히 고려 필요"
@@ -268,7 +293,7 @@ def generate_personalized_content(
     )
 
 
-def _generate_rebalancing(portfolio: Portfolio, g: dict, target: dict, risk_grade: str) -> list[dict]:
+def _generate_rebalancing(portfolio: Portfolio, g: dict, target: dict, risk_grade: str) -> list[RebalancingRecommendation]:
     """리스크 성향 기반 리밸런싱 추천 생성"""
     equity_w = g["equity"]
     alt_w = g["alt"]
@@ -295,8 +320,8 @@ def _generate_rebalancing(portfolio: Portfolio, g: dict, target: dict, risk_grad
         bond_diff = target_bond - g["bond"]
         per_adj = bond_diff / len(bond_allocs)
         for a in bond_allocs:
-            new_w = round(max(0.0, min(60.0, a.weight + per_adj)), 1)
-            direction = "증가" if new_w > a.weight + 0.5 else ("감소" if new_w < a.weight - 0.5 else "유지")
+            new_w = round(max(0.0, min(_BOND_WEIGHT_MAX, a.weight + per_adj)), 1)
+            direction = "증가" if new_w > a.weight + _DIRECTION_THRESHOLD else ("감소" if new_w < a.weight - _DIRECTION_THRESHOLD else "유지")
             asset_display = a.asset_name if a.asset_name else ("단기채권" if a.asset_type == AssetType.SHORT_BOND else "채권")
             if direction == "증가":
                 reason = f"고금리 환경에서 {asset_display} 매력 상승 — {risk_grade} 목표({target_bond:.0f}%) 향해 점진적 확대"
@@ -336,8 +361,8 @@ def _generate_rebalancing(portfolio: Portfolio, g: dict, target: dict, risk_grad
         alt_diff = target_alt - alt_w
         per_adj = alt_diff / len(alt_allocs)
         for a in alt_allocs:
-            new_w = round(max(0.0, min(50.0, a.weight + per_adj)), 1)
-            direction = "증가" if new_w > a.weight + 0.5 else ("감소" if new_w < a.weight - 0.5 else "유지")
+            new_w = round(max(0.0, min(_ALT_WEIGHT_MAX, a.weight + per_adj)), 1)
+            direction = "증가" if new_w > a.weight + _DIRECTION_THRESHOLD else ("감소" if new_w < a.weight - _DIRECTION_THRESHOLD else "유지")
             reason = _alt_reason(direction, a.asset_type, a.asset_name, target_alt, a.weight, new_w)
             recs.append({"asset_name": a.asset_name, "current_weight": a.weight,
                           "recommended_weight": new_w, "direction": direction, "reason": reason})
@@ -347,8 +372,8 @@ def _generate_rebalancing(portfolio: Portfolio, g: dict, target: dict, risk_grad
         equity_diff = target_equity - equity_w
         per_adj = equity_diff / len(equity_allocs)
         for a in equity_allocs:
-            new_w = round(max(5.0, min(95.0, a.weight + per_adj)), 1)
-            direction = "증가" if new_w > a.weight + 0.5 else ("감소" if new_w < a.weight - 0.5 else "유지")
+            new_w = round(max(_EQUITY_WEIGHT_MIN, min(_EQUITY_WEIGHT_MAX, a.weight + per_adj)), 1)
+            direction = "증가" if new_w > a.weight + _DIRECTION_THRESHOLD else ("감소" if new_w < a.weight - _DIRECTION_THRESHOLD else "유지")
             reason = _equity_reason(direction, risk_grade, target["equity"])
             recs.append({"asset_name": a.asset_name, "current_weight": a.weight,
                           "recommended_weight": new_w, "direction": direction, "reason": reason})
@@ -356,23 +381,28 @@ def _generate_rebalancing(portfolio: Portfolio, g: dict, target: dict, risk_grad
     # ── 비중 합 100% 미세 보정 ───────────────────────────────────
     total_rec = sum(r["recommended_weight"] for r in recs)
     diff = round(100.0 - total_rec, 1)
-    if abs(diff) >= 0.1:
+    if abs(diff) >= _WEIGHT_CORRECTION_MIN:
         # 조정 가능한 자산 중 비중이 가장 큰 자산에서 잔차 흡수
         adjustable = [r for r in recs if r["direction"] in ("증가", "감소", "유지")
                       and r.get("recommended_weight", 0) >= 5.0]
+        if not adjustable:
+            # direction·비중 조건을 만족하는 자산이 없는 엣지 케이스 (예: 전체가 "추가" 또는 비중 <5%)
+            # → 비중 > 0인 임의 자산에서 잔차 흡수하여 합계 100% 보장
+            adjustable = [r for r in recs if r.get("recommended_weight", 0) > 0]
         if adjustable:
             largest = max(adjustable, key=lambda r: r["recommended_weight"])
             largest["recommended_weight"] = round(largest["recommended_weight"] + diff, 1)
             # 보정 후 방향 재계산
             gap = largest["recommended_weight"] - largest["current_weight"]
-            if abs(gap) < 0.5:
+            if abs(gap) < _DIRECTION_THRESHOLD:
                 largest["direction"] = "유지"
             elif gap < 0:
                 largest["direction"] = "감소"
             else:
                 largest["direction"] = "증가"
 
-    return recs
+    # dict 리스트 → RebalancingRecommendation 리스트로 변환 (타입 안전성 + 파싱 실패 조기 감지)
+    return [RebalancingRecommendation(**r) for r in recs]
 
 
 def _equity_reason(direction: str, risk_grade: str, target_equity: float) -> str:
@@ -422,12 +452,12 @@ def _generate_market_commentary(
     parts = []
 
     # 금리 환경
-    if market.us_10y_yield >= 4.5:
+    if market.us_10y_yield >= _HIGH_RATE_YIELD:
         parts.append(
             f"미국 10년 국채 금리 {market.us_10y_yield:.2f}%로 고금리 환경 지속 중으로, "
             f"채권·현금 비중 확대가 수익 방어에 유리합니다."
         )
-    elif market.us_10y_yield >= 3.5:
+    elif market.us_10y_yield >= _MID_RATE_YIELD:
         parts.append(
             f"미국 10년 국채 금리 {market.us_10y_yield:.2f}%는 중립적 수준으로, "
             f"주식·채권 균형 유지가 적절한 전략입니다."
@@ -440,8 +470,8 @@ def _generate_market_commentary(
 
     # 해외 주식 보유자만 환율 코멘트
     foreign_w = sum(a.weight for a in portfolio.allocations if a.asset_type == AssetType.FOREIGN_STOCK)
-    if foreign_w >= 20:
-        if market.usd_krw >= 1400:
+    if foreign_w >= _FOREIGN_STOCK_THRESHOLD:
+        if market.usd_krw >= _FX_WEAK_KRW:
             parts.append(
                 f"달러/원 환율 {market.usd_krw:,.0f}원으로 원화 약세가 지속되어, "
                 f"해외주식 {foreign_w:.0f}% 보유 포트폴리오는 환차익 효과가 기대됩니다. "
@@ -454,6 +484,8 @@ def _generate_market_commentary(
             )
 
     # 암호화폐(비트코인/기타) 보유자 전용 코멘트
+    # 비중 무관 — 소액 보유자도 규제·거래소 리스크 기본 안내가 필요하므로 보유 여부만 체크
+    # (약점 섹션의 _CRYPTO_WARNING_THRESHOLD(20%)는 "비중 과다" 경고로 목적이 다름)
     crypto_allocs = [a for a in portfolio.allocations if a.asset_type in (AssetType.BITCOIN, AssetType.CRYPTO)]
     if crypto_allocs:
         crypto_w = sum(a.weight for a in crypto_allocs)
@@ -463,7 +495,7 @@ def _generate_market_commentary(
         )
 
     # 인플레이션
-    if market.cpi_us >= 3.0:
+    if market.cpi_us >= _HIGH_CPI_THRESHOLD:
         parts.append(
             f"미국 CPI {market.cpi_us:.1f}%로 인플레이션 압력이 지속되고 있어 "
             f"실질 수익률 보호를 위한 자산 다각화를 고려하시기 바랍니다."
@@ -481,6 +513,7 @@ def _generate_cautions(
     """포트폴리오 맞춤 주의사항"""
     cautions = []
 
+    # 비중 무관 — 소액 보유자도 규제·거래소 리스크 기본 안내가 필요하므로 보유 여부만 체크
     crypto_allocs = [a for a in portfolio.allocations if a.asset_type in (AssetType.BITCOIN, AssetType.CRYPTO)]
     if crypto_allocs:
         crypto_w = sum(a.weight for a in crypto_allocs)
@@ -492,13 +525,14 @@ def _generate_cautions(
     foreign_allocs = [a for a in portfolio.allocations if a.asset_type == AssetType.FOREIGN_STOCK]
     if foreign_allocs:
         foreign_w = sum(a.weight for a in foreign_allocs)
-        cautions.append(
-            f"해외 ETF 투자 시 환율 변동(현재 {market.usd_krw:,.0f}원)이 원화 실질 수익률에 미치는 영향을 "
-            f"정기적으로 확인하세요."
-        )
+        if foreign_w >= _FOREIGN_STOCK_THRESHOLD:
+            cautions.append(
+                f"해외 ETF 투자 시 환율 변동(현재 {market.usd_krw:,.0f}원)이 원화 실질 수익률에 미치는 영향을 "
+                f"정기적으로 확인하세요."
+            )
 
     risky_w = _risk_asset_weight(g)
-    if risky_w >= 60:
+    if risky_w >= _RISKY_CAUTION_THRESHOLD:
         cautions.append(
             f"위험자산 {risky_w:.0f}%로 시장 급락 시 단기 평가손실이 발생할 수 있습니다. "
             f"장기 관점을 유지하며 공황 매도를 피하는 것이 중요합니다."

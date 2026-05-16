@@ -39,6 +39,15 @@ class MarketSnapshot(BaseModel):
     fetched_at: datetime
 
 
+class RebalancingRecommendation(BaseModel):
+    """개별 자산 리밸런싱 추천 — AI 응답 및 fallback 분석기 공통 구조"""
+    asset_name: str
+    current_weight: float
+    recommended_weight: float
+    direction: str  # 증가 / 감소 / 유지 / 추가
+    reason: str
+
+
 class AIContent(BaseModel):
     portfolio_diagnosis: str
     strengths: list[str]
@@ -46,7 +55,7 @@ class AIContent(BaseModel):
     risk_score: int  # 0~100
     risk_grade: str  # 안정형 / 중립형 / 공격형
     scenario_commentary: dict[str, str]  # bear/base/bull
-    rebalancing_recommendations: list[dict]  # asset_name, current_weight, recommended_weight, reason
+    rebalancing_recommendations: list[RebalancingRecommendation]  # Pydantic 검증으로 파싱 실패 조기 감지
     market_commentary: str
     cautions: list[str]
 
@@ -69,3 +78,4 @@ class ReportRecord(BaseModel):
     error_message: Optional[str] = None
     created_at: datetime
     completed_at: Optional[datetime] = None
+    download_count: int = 0  # 다운로드 횟수 추적 (토큰 유출 시 무제한 접근 방지)

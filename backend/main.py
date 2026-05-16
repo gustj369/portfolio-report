@@ -39,9 +39,13 @@ app = FastAPI(
 settings = get_settings()
 
 # CORS 허용 오리진:
-#   - 환경변수 FRONTEND_URL (Vercel 배포 URL 등)
-#   - 로컬 개발 주소
-#   - Vercel 프리뷰 도메인 (*vercel.app) 은 allow_origin_regex로 처리
+#   - 환경변수 FRONTEND_URL: 프로덕션·Vercel 배포 URL을 명시적으로 지정 (권장)
+#     예) FRONTEND_URL=https://my-app.vercel.app
+#   - 로컬 개발 주소는 항상 허용
+#
+# ※ 이전에 사용하던 allow_origin_regex=r"https://.*\.vercel\.app" 는 제거함.
+#    임의의 Vercel 앱(.vercel.app)이 API에 접근할 수 있는 보안 위험이 있었음.
+#    Vercel 프리뷰 URL이 필요하면 FRONTEND_URL 에 해당 URL을 명시적으로 추가할 것.
 _cors_origins = list({
     settings.frontend_url,
     "http://localhost:3000",
@@ -51,7 +55,6 @@ _cors_origins = list({
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
-    allow_origin_regex=r"https://.*\.vercel\.app",  # Vercel 프리뷰 URL 자동 허용
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

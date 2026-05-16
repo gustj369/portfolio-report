@@ -6,7 +6,7 @@ import Link from "next/link";
 import BlurSection from "@/components/BlurSection";
 import PortfolioChart from "@/components/PortfolioChart";
 import { useInput } from "@/context/InputContext";
-import { requestPayment, confirmPayment } from "@/lib/api";
+import { requestPayment, freeConfirmPayment } from "@/lib/api";
 
 const RISK_GRADE_COLORS: Record<string, string> = {
   안정형: "bg-green-500",
@@ -41,18 +41,16 @@ export default function PreviewPage() {
       const payRes = await requestPayment({ user_profile: userProfile, portfolio });
       setOrderId(payRes.order_id);
 
-      // 2. 자동 결제 승인 (무료 — 개발 모드)
-      const devPaymentKey = `dev_${Date.now()}`;
-      const confirmRes = await confirmPayment({
-        payment_key: devPaymentKey,
-        order_id: payRes.order_id,
-        amount: payRes.amount,
-      });
-
-      // 3. 리포트 생성 페이지로 이동
-      router.push(
-        `/payment/complete?paymentKey=${devPaymentKey}&orderId=${payRes.order_id}&amount=${payRes.amount}&token=${confirmRes.report_token}`
-      );
+      if (payRes.is_free) {
+        // 2a. 무료 플로우: freeConfirmPayment → token 발급 → complete 페이지
+        const confirmRes = await freeConfirmPayment(payRes.order_id);
+        router.push(
+          `/payment/complete?token=${confirmRes.report_token}&orderId=${payRes.order_id}&amount=0`
+        );
+      } else {
+        // 2b. 유료 플로우: payment 페이지로 이동 (Toss SDK 결제)
+        router.push("/payment");
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
       if (msg.includes("fetch") || msg.includes("network") || msg.includes("connect")) {

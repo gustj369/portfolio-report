@@ -588,7 +588,7 @@ def _build_rebalancing_page(
 
     # 비교 파이차트 — 실제 변경이 있는 경우에만 표시
     all_same = all(
-        abs(rec.get("recommended_weight", 0) - rec.get("current_weight", 0)) < 0.5
+        abs(rec.recommended_weight - rec.current_weight) < 0.5
         for rec in ai_content.rebalancing_recommendations
     )
     if rebalancing_chart_bytes and not all_same:
@@ -635,13 +635,13 @@ def _build_rebalancing_page(
 
     rec_data = [[_rh("자산명"), _rh("현재 비중"), _rh("추천 비중"), _rh("방향"), _rh("조정 이유")]]
     for rec in ai_content.rebalancing_recommendations:
-        direction = rec.get("direction", "유지")
+        direction = rec.direction  # RebalancingRecommendation 속성 접근
         rec_data.append([
-            _rc(rec.get("asset_name", "-"), align=0),
-            _rc(f"{rec.get('current_weight', 0):.1f}%"),
-            _rc(f"{rec.get('recommended_weight', 0):.1f}%"),
+            _rc(rec.asset_name, align=0),
+            _rc(f"{rec.current_weight:.1f}%"),
+            _rc(f"{rec.recommended_weight:.1f}%"),
             _rd(direction),
-            _rc(rec.get("reason", "-"), align=0),
+            _rc(rec.reason, align=0),
         ])
 
     rec_table = Table(rec_data, colWidths=col_widths_rec, repeatRows=1)

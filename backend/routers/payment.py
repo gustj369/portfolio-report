@@ -5,7 +5,9 @@ import uuid
 import base64
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+KST = timezone(timedelta(hours=9))
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 import httpx
@@ -74,7 +76,7 @@ async def request_payment(
                 "status": "pending",
                 "amount": settings.report_price_krw,
                 "analyze_request": body.analyze_request.model_dump(mode="json"),
-                "created_at": datetime.now().isoformat(),
+                "created_at": datetime.now(KST).isoformat(),
             },
             ttl=3600,  # 1시간 후 자동 만료
         )
@@ -150,7 +152,12 @@ async def confirm_payment(
                 )
                 if response.status_code != 200:
                     toss_error = response.json()
-                    logger.error(f"토스페이먼츠 승인 실패: {toss_error} ({time.perf_counter() - t0:.2f}s)")
+                    # 에러 응답 전체가 아닌 code·message 필드만 로깅 (카드 번호 등 민감 정보 노출 방지)
+                    logger.error(
+                        f"토스페이먼츠 승인 실패: code={toss_error.get('code')!r}, "
+                        f"message={toss_error.get('message')!r}, "
+                        f"httpStatus={response.status_code} ({time.perf_counter() - t0:.2f}s)"
+                    )
                     # Toss 5xx → 503 전달: 프론트엔드가 httpStatus===503 을 "server" 오류로 분기함.
                     # Toss 4xx → 400 전달: 만료·금액 불일치 등 결제 데이터 문제 → "payment" 오류로 분기.
                     http_status = 503 if response.status_code >= 500 else 400
@@ -178,7 +185,7 @@ async def confirm_payment(
             "payment_key": body.payment_key,
             "amount": body.amount,
             "analyze_request": pending["analyze_request"],
-            "confirmed_at": datetime.now().isoformat(),
+            "confirmed_at": datetime.now(KST).isoformat(),
         },
         ttl=86400 * 7,  # 7일 보관
     )
@@ -234,7 +241,7 @@ async def free_confirm(body: FreeConfirmInput) -> PaymentConfirmResponse:
             "payment_key": "",
             "amount": 0,
             "analyze_request": pending["analyze_request"],
-            "confirmed_at": datetime.now().isoformat(),
+            "confirmed_at": datetime.now(KST).isoformat(),
         },
         ttl=86400 * 7,
     )

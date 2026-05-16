@@ -144,19 +144,23 @@ export default function Step3Page() {
               <PortfolioChart allocations={portfolio.allocations} size={150} />
             </div>
 
-            {/* 이메일 입력 — 발송 기능 준비 중 (UI만 비활성화, 기능 코드는 유지) */}
-            <div className="mb-4 opacity-40 pointer-events-none select-none">
+            {/* 이메일 입력 — step1에서 입력한 값이 있으면 표시, 여기서도 수정 가능 */}
+            <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                이메일 <span className="text-gray-400">(리포트 발송 — 준비 중)</span>
+                이메일 <span className="text-gray-400">(선택 — 리포트 발송용)</span>
               </label>
               <input
                 type="email"
-                className="input-field bg-gray-100 cursor-not-allowed"
-                placeholder="이메일 발송 기능 준비 중입니다"
-                disabled
-                readOnly
-                value=""
+                className="input-field"
+                placeholder="example@email.com"
+                value={userProfile.email || ""}
+                onChange={(e) => setUserProfile({ email: e.target.value })}
               />
+              {userProfile.email && (
+                <p className="text-xs text-green-600 mt-1">
+                  ✓ 완성된 리포트가 이 주소로 발송됩니다.
+                </p>
+              )}
             </div>
 
             {error && (

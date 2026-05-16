@@ -5,6 +5,7 @@ from models.portfolio import Portfolio
 from models.report import SimulationResult, ScenarioResult
 from services.market_data import get_weighted_return_and_vol, MarketSnapshot
 
+# 승수: bear=0.6(기본 수익률의 60%), base=1.0(그대로), bull=1.4(140%)
 SCENARIOS = {
     "bear": ("비관", 0.6),
     "base": ("기본", 1.0),
@@ -13,6 +14,22 @@ SCENARIOS = {
 
 INVESTMENT_YEARS = 5
 MONTHS = INVESTMENT_YEARS * 12
+
+# 강세장 연수익률 상한: 암호화폐 등 고변동성 자산 포트폴리오에서 비현실적 수익률 방지
+# 예) base_return=20%(비트코인 다수) × 1.4 = 28% → 25% 상한 적용
+_BULL_RETURN_CAP = 0.25
+
+# 리스크 점수 산출 파라미터 (calculate_risk_score 사용)
+_VOL_SCORE_MULTIPLIER = 300      # 가중평균 변동성 → 점수 환산 배수
+_VOL_SCORE_MAX = 80              # 변동성 점수 상한
+_RISKY_SCORE_MAX = 30            # 위험자산 비중 점수 상한
+_CONCENTRATION_THRESHOLD = 40   # 집중도 패널티 발생 기준 (단일 자산 비중 %)
+_CONCENTRATION_PENALTY_RATE = 0.5  # 초과 비중 1%당 패널티 점수
+_DIVERSITY_SCORE_PER_TYPE = 2   # 자산 유형 1개당 다양성 보너스 점수
+_DIVERSITY_BONUS_MAX = 10        # 다양성 보너스 상한
+_STABLE_GRADE_MAX = 30           # 안정형 상한 점수
+_NEUTRAL_GRADE_MAX = 65          # 중립형 상한 점수
+_DEFAULT_VOLATILITY = 0.15       # BASE_VOLATILITY 미등록 자산 fallback 변동성
 
 
 def run_simulation(
@@ -33,6 +50,8 @@ def run_simulation(
     results = {}
     for scenario_key, (scenario_name, multiplier) in SCENARIOS.items():
         annual_return = base_return * multiplier
+        if scenario_key == "bull":
+            annual_return = min(annual_return, _BULL_RETURN_CAP)
         scenario_result = _simulate_scenario(
             name=scenario_name,
             initial_value=initial_value,
@@ -83,9 +102,14 @@ def _simulate_scenario(
     total_invested = initial_value + monthly_contribution * months
     total_return_pct = (final_value - total_invested) / total_invested * 100 if total_invested > 0 else 0
 
-    # CAGR = 실제 포트폴리오 연수익률 (DCA 기여분을 감안한 전체 투자 대비 성장률)
+    # CAGR = 포트폴리오 운용 연수익률 (시뮬레이션에 적용된 실제 수익률)
+    # ※ DCA 구조에서 (final / total_invested)^(1/n) 공식을 쓰면
+    #    후반부 납입금은 투자 기간이 짧음에도 처음부터 투자된 것처럼 취급되어
+    #    실제 운용 수익률이 크게 과소평가됨.
+    #    예) annual_return=10%이라도 60개월 DCA 시 약 5~6%로 왜곡.
+    #    annual_return은 매월 월수익률로 변환해 직접 적용한 값이므로 이를 CAGR로 표시.
     years = months / 12
-    cagr = (final_value / total_invested) ** (1 / years) - 1 if total_invested > 0 else 0
+    cagr = annual_return
 
     return ScenarioResult(
         name=name,
@@ -115,29 +139,29 @@ def calculate_risk_score(
 
     # 1. 가중평균 변동성 기반 점수 (기본값 사용으로 안정적 산출)
     weighted_vol = sum(
-        (a.weight / 100) * BASE_VOLATILITY.get(a.asset_type, 0.15)
+        (a.weight / 100) * BASE_VOLATILITY.get(a.asset_type, _DEFAULT_VOLATILITY)
         for a in portfolio.allocations
     )
-    vol_score = min(int(weighted_vol * 300), 80)
+    vol_score = min(int(weighted_vol * _VOL_SCORE_MULTIPLIER), _VOL_SCORE_MAX)
 
-    # 2. 위험자산 비중 점수 (주식·암호화폐·대안·금, 최대 30점)
+    # 2. 위험자산 비중 점수 (주식·암호화폐·대안·금, 최대 _RISKY_SCORE_MAX점)
     risky_w = sum(a.weight for a in portfolio.allocations if a.asset_type in _RISKY_TYPES) / 100
-    risky_score = int(risky_w * 30)
+    risky_score = int(risky_w * _RISKY_SCORE_MAX)
 
-    # 3. 집중도 패널티 (단일 자산 40% 초과 시)
+    # 3. 집중도 패널티 (단일 자산 _CONCENTRATION_THRESHOLD% 초과 시)
     max_weight = max(a.weight for a in portfolio.allocations)
-    concentration_penalty = int(max(0, (max_weight - 40) * 0.5))
+    concentration_penalty = int(max(0, (max_weight - _CONCENTRATION_THRESHOLD) * _CONCENTRATION_PENALTY_RATE))
 
-    # 4. 다양성 보너스 (최대 10점)
+    # 4. 다양성 보너스 (최대 _DIVERSITY_BONUS_MAX점)
     asset_types = set(a.asset_type for a in portfolio.allocations)
-    diversity_bonus = min(len(asset_types) * 2, 10)
+    diversity_bonus = min(len(asset_types) * _DIVERSITY_SCORE_PER_TYPE, _DIVERSITY_BONUS_MAX)
 
     score = vol_score + risky_score + concentration_penalty - diversity_bonus
     score = max(0, min(100, score))
 
-    if score <= 30:
+    if score <= _STABLE_GRADE_MAX:
         grade = "안정형"
-    elif score <= 65:
+    elif score <= _NEUTRAL_GRADE_MAX:
         grade = "중립형"
     else:
         grade = "공격형"

@@ -2,6 +2,7 @@
 PDF 리포트 생성 라우터
 결제 확인 → 전체 분석 → PDF 생성 → 저장 → 다운로드 링크 반환
 """
+import asyncio
 import os
 import logging
 import time
@@ -51,6 +52,15 @@ def _load_record(report_token: str) -> ReportRecord | None:
     if data is None:
         return None
     return ReportRecord.model_validate(data)
+
+
+def _safe_chart(fn, *args):
+    """차트 생성 헬퍼 — 실패 시 None 반환 (PDF는 해당 차트 없이 계속 생성)"""
+    try:
+        return fn(*args)
+    except Exception as e:
+        logger.warning(f"차트 생성 실패 ({fn.__name__}): {e}")
+        return None
 
 
 class GenerateReportRequest(BaseModel):
@@ -193,6 +203,9 @@ async def get_report_status(report_token: str) -> ReportStatusResponse:
     )
 
 
+_MAX_DOWNLOADS = 10  # 토큰 유출 시 무제한 접근 방지 — 정상 재다운로드(2~3회)보다 충분히 큰 값
+
+
 @router.get("/download/{report_token}")
 async def download_report(report_token: str, settings: Settings = Depends(get_settings)):
     """리포트 다운로드 — R2/S3에서 읽어 직접 스트리밍 (CORS 우회)"""
@@ -204,6 +217,24 @@ async def download_report(report_token: str, settings: Settings = Depends(get_se
     if record.status != ReportStatus.READY:
         logger.info(f"[{report_token}] 다운로드 요청 — 상태 {record.status.value} → 409 반환")
         raise HTTPException(status_code=409, detail="리포트가 아직 준비되지 않았습니다.")
+
+    # 다운로드 횟수 제한: 토큰 유출로 인한 무제한 접근 방지
+    if record.download_count >= _MAX_DOWNLOADS:
+        logger.warning(
+            f"[{report_token}] 다운로드 횟수 초과 ({record.download_count}/{_MAX_DOWNLOADS}) → 429 반환"
+        )
+        raise HTTPException(
+            status_code=429,
+            detail=f"다운로드 횟수({_MAX_DOWNLOADS}회)를 초과했습니다. 문의가 필요하시면 고객센터에 연락해주세요.",
+        )
+
+    # 다운로드 카운트 증가 후 저장 (저장 실패해도 다운로드는 계속 — 최선 노력)
+    record.download_count += 1
+    try:
+        _save_record(record)
+        logger.info(f"[{report_token}] 다운로드 #{record.download_count} 시작")
+    except Exception as cnt_err:
+        logger.warning(f"[{report_token}] 다운로드 카운트 저장 실패 (무시): {cnt_err}")
 
     filename = f"report_{report_token}.pdf"
 
@@ -220,7 +251,10 @@ async def download_report(report_token: str, settings: Settings = Depends(get_se
             region_name="auto",
         )
         s3_key = f"reports/{report_token}/{filename}"
-        obj = s3.get_object(Bucket=settings.r2_bucket, Key=s3_key)
+        _dl_loop = asyncio.get_running_loop()
+        obj = await _dl_loop.run_in_executor(
+            None, lambda: s3.get_object(Bucket=settings.r2_bucket, Key=s3_key)
+        )
         pdf_bytes = obj["Body"].read()
         return StreamingResponse(
             io.BytesIO(pdf_bytes),
@@ -265,69 +299,63 @@ async def _generate_report_background(
         # AnalyzeRequest 복원
         analyze_req = AnalyzeRequest.model_validate(payment["analyze_request"])
 
-        # 1. 시장 데이터 수집
+        # 1. 시장 데이터 수집 (네트워크 I/O — run_in_executor로 이벤트 루프 블로킹 방지)
         logger.info(f"[{report_token}] 시장 데이터 수집 시작")
-        market_snapshot = fetch_market_snapshot(settings.fred_api_key)
+        loop = asyncio.get_running_loop()
+        market_snapshot = await loop.run_in_executor(None, fetch_market_snapshot, settings.fred_api_key)
         logger.info(f"[{report_token}] 시장 데이터 수집 완료 ({time.perf_counter()-t0:.2f}s)")
 
         # 2. 시뮬레이션
         simulation = run_simulation(analyze_req.portfolio, market_snapshot)
         logger.info(f"[{report_token}] 시뮬레이션 완료 ({time.perf_counter()-t0:.2f}s)")
 
-        # 3. 전체 AI 분석
+        # 3. 전체 AI 분석 (Gemini time.sleep 포함 — run_in_executor로 이벤트 루프 블로킹 방지)
         logger.info(f"[{report_token}] AI 분석 시작 ({time.perf_counter()-t0:.2f}s)")
         if settings.gemini_api_key:
-            ai_content = generate_full_analysis(
-                analyze_req.user_profile,
-                analyze_req.portfolio,
-                simulation,
-                market_snapshot,
-                settings.gemini_api_key,
+            ai_content = await loop.run_in_executor(
+                None, generate_full_analysis,
+                analyze_req.user_profile, analyze_req.portfolio,
+                simulation, market_snapshot, settings.gemini_api_key,
             )
             logger.info(f"[{report_token}] Gemini AI 분석 사용 ({time.perf_counter()-t0:.2f}s)")
         else:
             from services.fallback_analyzer import generate_personalized_content
             risk_score, risk_grade = calculate_risk_score(analyze_req.portfolio, market_snapshot)
-            ai_content = generate_personalized_content(
-                analyze_req.user_profile,
-                analyze_req.portfolio,
-                simulation,
-                market_snapshot,
-                risk_score,
-                risk_grade,
+            ai_content = await loop.run_in_executor(
+                None, generate_personalized_content,
+                analyze_req.user_profile, analyze_req.portfolio,
+                simulation, market_snapshot, risk_score, risk_grade,
             )
             logger.info(f"[{report_token}] Gemini 미설정 — fallback 분석 사용 ({time.perf_counter()-t0:.2f}s)")
         logger.info(f"[{report_token}] AI 분석 완료 ({time.perf_counter()-t0:.2f}s 누적)")
 
-        # 4. 차트 생성 — 개별 실패 시 None 반환 (PDF는 해당 차트 없이 계속 생성)
+        # 4. 차트 생성 (matplotlib CPU-bound — run_in_executor로 이벤트 루프 블로킹 방지)
         logger.info(f"[{report_token}] 차트 생성 시작 ({time.perf_counter()-t0:.2f}s)")
-        def _safe_chart(fn, *args):
-            try:
-                return fn(*args)
-            except Exception as e:
-                logger.warning(f"차트 생성 실패 ({fn.__name__}): {e}")
-                return None
-
-        charts = {
-            "pie":          _safe_chart(generate_portfolio_pie_chart, analyze_req.portfolio),
-            "line":         _safe_chart(generate_projection_line_chart, simulation),
-            "stacked_bar":  _safe_chart(generate_stacked_bar_chart, analyze_req.portfolio, simulation),
-            "rebalancing":  _safe_chart(generate_rebalancing_comparison_chart,
-                                        analyze_req.portfolio,
-                                        ai_content.rebalancing_recommendations),
-        }
+        _ptf = analyze_req.portfolio
+        _sim = simulation
+        _recs = ai_content.rebalancing_recommendations
+        charts = await loop.run_in_executor(None, lambda: {
+            "pie":          _safe_chart(generate_portfolio_pie_chart, _ptf),
+            "line":         _safe_chart(generate_projection_line_chart, _sim),
+            "stacked_bar":  _safe_chart(generate_stacked_bar_chart, _ptf, _sim),
+            "rebalancing":  _safe_chart(generate_rebalancing_comparison_chart, _ptf, _recs),
+        })
         logger.info(f"[{report_token}] 차트 생성 완료 ({time.perf_counter()-t0:.2f}s 누적)")
 
-        # 5. PDF 생성
+        # 5. PDF 생성 (ReportLab CPU-bound — run_in_executor로 이벤트 루프 블로킹 방지)
         logger.info(f"[{report_token}] PDF 생성 시작 ({time.perf_counter()-t0:.2f}s)")
-        pdf_bytes = build_report(
-            user_profile=analyze_req.user_profile,
-            portfolio=analyze_req.portfolio,
-            simulation=simulation,
-            ai_content=ai_content,
-            market_snapshot=market_snapshot,
-            charts=charts,
-        )
+        _uprofile = analyze_req.user_profile
+        _msnap = market_snapshot
+        _charts = charts
+        _ai = ai_content
+        pdf_bytes = await loop.run_in_executor(None, lambda: build_report(
+            user_profile=_uprofile,
+            portfolio=_ptf,
+            simulation=_sim,
+            ai_content=_ai,
+            market_snapshot=_msnap,
+            charts=_charts,
+        ))
         logger.info(f"[{report_token}] PDF 생성 완료 ({time.perf_counter()-t0:.2f}s 누적)")
 
         # 6. 저장 (로컬 / AWS S3 / Cloudflare R2)
@@ -343,21 +371,28 @@ async def _generate_report_background(
         logger.info(f"[{report_token}] 리포트 생성 완료 (총 {time.perf_counter()-t0:.2f}s): {download_url}")
 
         # 8. 이메일 발송 (SMTP 설정 + 사용자 이메일 있는 경우)
+        # SMTP는 동기 네트워크 I/O → run_in_executor로 이벤트 루프 블로킹 방지
         user_email = analyze_req.user_profile.email
         if user_email and settings.smtp_host and settings.smtp_user and settings.smtp_password:
             try:
                 from services.email_service import send_report_email
                 from_addr = settings.smtp_from or settings.smtp_user
-                sent = send_report_email(
-                    smtp_host=settings.smtp_host,
-                    smtp_port=settings.smtp_port,
-                    smtp_user=settings.smtp_user,
-                    smtp_password=settings.smtp_password,
+                _smtp_host = settings.smtp_host
+                _smtp_port = settings.smtp_port
+                _smtp_user = settings.smtp_user
+                _smtp_password = settings.smtp_password
+                _user_name = analyze_req.user_profile.name
+                _email_fn = lambda: send_report_email(
+                    smtp_host=_smtp_host,
+                    smtp_port=_smtp_port,
+                    smtp_user=_smtp_user,
+                    smtp_password=_smtp_password,
                     from_address=from_addr,
                     to_address=user_email,
-                    user_name=analyze_req.user_profile.name,
+                    user_name=_user_name,
                     pdf_bytes=pdf_bytes,
                 )
+                sent = await loop.run_in_executor(None, _email_fn)
                 if sent:
                     logger.info(f"[{report_token}] 이메일 발송 완료: {user_email} ({time.perf_counter()-t0:.2f}s 누적)")
                 else:
@@ -398,12 +433,13 @@ async def _save_report(report_token: str, pdf_bytes: bytes, settings: Settings) 
             region_name="auto",
         )
         s3_key = f"reports/{report_token}/{filename}"
-        s3.put_object(
+        _save_loop = asyncio.get_running_loop()
+        await _save_loop.run_in_executor(None, lambda: s3.put_object(
             Bucket=settings.r2_bucket,
             Key=s3_key,
             Body=pdf_bytes,
             ContentType="application/pdf",
-        )
+        ))
         # presigned URL 대신 백엔드 프록시 URL 반환 (CORS 문제 없음)
         return f"/report/download/{report_token}"
 
@@ -417,16 +453,19 @@ async def _save_report(report_token: str, pdf_bytes: bytes, settings: Settings) 
             region_name=settings.aws_region,
         )
         s3_key = f"reports/{report_token}/{filename}"
-        s3.put_object(
+        _s3_loop = asyncio.get_running_loop()
+        await _s3_loop.run_in_executor(None, lambda: s3.put_object(
             Bucket=settings.s3_bucket,
             Key=s3_key,
             Body=pdf_bytes,
             ContentType="application/pdf",
-        )
-        presigned_url = s3.generate_presigned_url(
-            "get_object",
-            Params={"Bucket": settings.s3_bucket, "Key": s3_key},
-            ExpiresIn=86400,
+        ))
+        presigned_url = await _s3_loop.run_in_executor(
+            None, lambda: s3.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": settings.s3_bucket, "Key": s3_key},
+                ExpiresIn=86400,
+            )
         )
         return presigned_url
 

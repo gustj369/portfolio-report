@@ -2,7 +2,10 @@
 Google Gemini API 연동 — 포트폴리오 분석 텍스트 생성
 모델: gemini-1.5-flash (무료 티어: 1,500 req/day)
 """
-import google.generativeai as genai
+from google import genai
+from google.genai import types
+from google.genai.errors import APIError, ClientError
+import httpx
 import json
 import logging
 import time
@@ -33,22 +36,18 @@ def generate_full_analysis(
     api_key: str,
 ) -> AIContent:
     """Gemini API를 호출하여 전체 분석 콘텐츠 생성"""
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(
-        model_name=DEFAULT_MODEL,
-        system_instruction=SYSTEM_PROMPT,
-    )
+    client = genai.Client(api_key=api_key)
 
     portfolio_data = _build_portfolio_context(user_profile, portfolio, simulation, market_snapshot)
 
     # 1. 포트폴리오 종합 진단
-    diagnosis_result = _call_gemini(model, _build_diagnosis_prompt(portfolio_data), label="진단")
+    diagnosis_result = _call_gemini(client, _build_diagnosis_prompt(portfolio_data), label="진단")
 
     # 2. 리밸런싱 추천
-    rebalancing_result = _call_gemini(model, _build_rebalancing_prompt(portfolio_data, portfolio), label="리밸런싱")
+    rebalancing_result = _call_gemini(client, _build_rebalancing_prompt(portfolio_data, portfolio), label="리밸런싱")
 
     # 3. 시장 코멘트 + 주의사항
-    market_result = _call_gemini(model, _build_market_prompt(portfolio_data), label="시장코멘트")
+    market_result = _call_gemini(client, _build_market_prompt(portfolio_data), label="시장코멘트")
 
     return _parse_ai_results(diagnosis_result, rebalancing_result, market_result, simulation, portfolio)
 
@@ -63,11 +62,7 @@ def generate_preview_summary(
     미리보기용 간단 요약 생성 (결제 전)
     Returns: (summary_text, risk_score, risk_grade)
     """
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(
-        model_name=DEFAULT_MODEL,
-        system_instruction=SYSTEM_PROMPT,
-    )
+    client = genai.Client(api_key=api_key)
 
     portfolio_data = _build_portfolio_context(user_profile, portfolio, None, market_snapshot)
 
@@ -82,12 +77,13 @@ def generate_preview_summary(
   "risk_grade": "안정형" 또는 "중립형" 또는 "공격형"
 }}"""
 
-    result = _call_gemini(model, prompt, label="미리보기")
+    result = _call_gemini(client, prompt, label="미리보기")
 
     try:
         data = json.loads(_extract_json(result))
         return data["summary"], int(data["risk_score"]), data["risk_grade"]
-    except Exception:
+    except (ValueError, KeyError, TypeError) as e:
+        logger.warning(f"미리보기 파싱 실패 ({type(e).__name__}): {e}")
         return result[:150], 50, "중립형"
 
 
@@ -195,45 +191,54 @@ def _build_market_prompt(portfolio_data: str) -> str:
 }}"""
 
 
-def _call_gemini(model: genai.GenerativeModel, prompt: str, label: str = "") -> str:
+def _call_gemini(client: genai.Client, prompt: str, label: str = "") -> str:
     """Gemini API 호출 (최대 3회 재시도)"""
-    config = genai.types.GenerationConfig(
+    config = types.GenerateContentConfig(
+        system_instruction=SYSTEM_PROMPT,
         temperature=0.4,
         max_output_tokens=1500,
+        http_options=types.HttpOptions(timeout=60),  # 60초 초과 시 httpx.TimeoutException → retry
     )
     _label = f"[{label}] " if label else ""
+    _last_rate_limit_exc: Exception | None = None  # rate limit 마지막 예외 추적 (3회 소진 시 전파용)
 
     for attempt in range(3):
         try:
             t_start = time.perf_counter()
-            response = model.generate_content(
-                prompt,
-                generation_config=config,
-                request_options={"timeout": 60},  # 60초 초과 시 DeadlineExceeded → retry
+            response = client.models.generate_content(
+                model=DEFAULT_MODEL,
+                contents=prompt,
+                config=config,
             )
             logger.info(f"Gemini {_label}완료 ({time.perf_counter()-t_start:.2f}s)")
             return response.text
-        except Exception as e:
-            error_msg = str(e).lower()
-            if "429" in error_msg or "quota" in error_msg:
-                # Rate limit — 지수 백오프
+        except (APIError, httpx.TimeoutException) as e:
+            if isinstance(e, ClientError) and e.code == 429:
+                # Rate limit (429/quota) — 지수 백오프 후 재시도
+                _last_rate_limit_exc = e
                 wait = 2 ** attempt * 5
-                logger.warning(f"Gemini rate limit, {wait}초 대기 (시도 {attempt + 1})")
+                logger.warning(f"Gemini {_label}rate limit ({type(e).__name__}), {wait}초 대기 (시도 {attempt + 1}/3)")
                 time.sleep(wait)
-            elif "deadline" in error_msg or "timeout" in error_msg:
+            elif isinstance(e, httpx.TimeoutException):
                 # 60초 타임아웃 초과 — 재시도
-                logger.warning(f"Gemini timeout (시도 {attempt + 1}/3), 재시도...")
+                logger.warning(f"Gemini {_label}timeout ({type(e).__name__}) (시도 {attempt + 1}/3), 재시도...")
                 time.sleep(2)
                 if attempt >= 2:
-                    logger.error("Gemini timeout 최종 실패 (3회 초과)")
+                    logger.error(f"Gemini {_label}timeout 최종 실패 (3회 초과)")
                     raise
             elif attempt < 2:
-                logger.warning(f"Gemini API 오류 (시도 {attempt + 1}): {e}")
+                logger.warning(f"Gemini {_label}API 오류 ({type(e).__name__}, 시도 {attempt + 1}): {e}")
                 time.sleep(1)
             else:
-                logger.error(f"Gemini API 최종 실패: {e}")
+                logger.error(f"Gemini {_label}API 최종 실패 ({type(e).__name__}): {e}")
                 raise
 
+    # rate limit 3회 모두 소진 — 조용히 빈 문자열 반환하지 않고 예외 전파
+    # 호출부 처리: generate_full_analysis → 보고서 ERROR 상태
+    #             generate_preview_summary → except 블록의 rule-based fallback 사용
+    if _last_rate_limit_exc is not None:
+        logger.error(f"Gemini {_label}rate limit 3회 소진 — 예외 전파")
+        raise _last_rate_limit_exc
     return ""
 
 
@@ -252,18 +257,18 @@ def _parse_ai_results(
 
     try:
         diagnosis = json.loads(_extract_json(diagnosis_raw))
-    except Exception as e:
-        logger.warning(f"진단 파싱 실패: {e}\n원본: {diagnosis_raw[:200]}")
+    except ValueError as e:
+        logger.warning(f"진단 파싱 실패 ({type(e).__name__}): {e}\n원본: {diagnosis_raw[:200]}")
 
     try:
         rebalancing = json.loads(_extract_json(rebalancing_raw))
-    except Exception as e:
-        logger.warning(f"리밸런싱 파싱 실패: {e}\n원본: {rebalancing_raw[:200]}")
+    except ValueError as e:
+        logger.warning(f"리밸런싱 파싱 실패 ({type(e).__name__}): {e}\n원본: {rebalancing_raw[:200]}")
 
     try:
         market = json.loads(_extract_json(market_raw))
-    except Exception as e:
-        logger.warning(f"시장 파싱 실패: {e}\n원본: {market_raw[:200]}")
+    except ValueError as e:
+        logger.warning(f"시장 파싱 실패 ({type(e).__name__}): {e}\n원본: {market_raw[:200]}")
 
     if not rebalancing.get("recommendations"):
         rebalancing["recommendations"] = [
