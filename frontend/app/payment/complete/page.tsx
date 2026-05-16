@@ -7,7 +7,7 @@ import { useInput } from "@/context/InputContext";
 import { confirmPayment, generateReport, getReportStatus, getDownloadUrl } from "@/lib/api";
 import type { ReportStatus } from "@/types/portfolio";
 
-const STATUS_MESSAGES: Record<string, string> = {
+const STATUS_MESSAGES: Record<ReportStatus, string> = {
   pending: "리포트 생성 준비 중...",
   generating: "AI 분석 및 PDF 생성 중...",
   ready: "리포트 준비 완료!",
@@ -15,7 +15,7 @@ const STATUS_MESSAGES: Record<string, string> = {
 };
 
 const STATUS_STEPS = [
-  "결제 확인",
+  "요청 확인",
   "시장 데이터 수집",
   "AI 분석 실행",
   "차트 생성",
@@ -198,8 +198,8 @@ function CompletePageContent() {
           if (status.status === "generating") setCurrentStep(Math.min(2 + Math.floor(attempts / 5), 4));
 
           if (status.status === "ready" && status.download_url) {
-            // getDownloadUrl(token)을 통해 API_URL 접두어 처리 (api.ts에서 일원화)
-            const resolvedUrl = getDownloadUrl(token);
+            // 백엔드가 내려준 download_url을 우선 사용하고, 상대 경로는 api.ts에서 API_URL 접두어 처리
+            const resolvedUrl = getDownloadUrl(token, status.download_url);
             sessionStorage.removeItem(`rpt_${orderId}`);
             if (isCancelled) return; // 언마운트 후 상태 업데이트 방어
             setDownloadUrl(resolvedUrl);
@@ -351,10 +351,10 @@ function CompletePageContent() {
           <div className="w-16 h-16 border-4 border-gold-400 border-t-transparent rounded-full animate-spin" />
         </div>
         <h1 className="text-xl font-bold text-navy mb-2">
-          {isRetrying ? "연결 재시도 중..." : phase === "confirming" ? "결제 확인 중..." : "리포트 생성 중..."}
+          {isRetrying ? "연결 재시도 중..." : phase === "confirming" ? "리포트 요청 중..." : "리포트 생성 중..."}
         </h1>
         <p className="text-gray-500 text-sm mb-6">
-          {STATUS_MESSAGES[reportStatus] || "처리 중입니다..."}
+          {STATUS_MESSAGES[reportStatus]}
         </p>
 
         {/* 단계 표시 */}
