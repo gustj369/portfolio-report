@@ -146,7 +146,7 @@ export function InputProvider({ children }: { children: ReactNode }) {
   };
 
   const reset = () => {
-    try { sessionStorage.removeItem(_STORAGE_KEY); } catch {}
+    try { sessionStorage.removeItem(_STORAGE_KEY); } catch { /* private mode 등 사용 불가 시 무시 */ }
     setState(DEFAULT_STATE);
   };
 
