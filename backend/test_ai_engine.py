@@ -258,3 +258,14 @@ class TestCallGemini:
             _call_gemini(client, "test prompt", label="테스트")
 
         assert any("timeout 최종 실패" in msg for msg in caplog.messages)
+
+    def test_api_error_exhausted_logs_error_message(self, caplog):
+        """비-429 APIError 3회 소진 시 ERROR 레벨로 'API 최종 실패' 메시지가 기록되어야 한다"""
+        client = self._make_client([_API_ERR_EXC, _API_ERR_EXC, _API_ERR_EXC])
+
+        with patch("services.ai_engine.time.sleep"), \
+             caplog.at_level(logging.ERROR, logger="services.ai_engine"), \
+             pytest.raises(APIError):
+            _call_gemini(client, "test prompt", label="테스트")
+
+        assert any("API 최종 실패" in msg for msg in caplog.messages)
