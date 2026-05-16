@@ -32,7 +32,7 @@ export default function PreviewPage() {
 
   const { risk_score, risk_grade, base_scenario_final, base_scenario_cagr, portfolio_summary } =
     previewResponse;
-  const badgeColor = RISK_GRADE_COLORS[risk_grade] || "bg-gray-500";
+  const badgeColor = RISK_GRADE_COLORS[risk_grade];
 
   const handleGetReport = async () => {
     setIsGenerating(true);

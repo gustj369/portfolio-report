@@ -354,7 +354,7 @@ function CompletePageContent() {
           {isRetrying ? "연결 재시도 중..." : phase === "confirming" ? "결제 확인 중..." : "리포트 생성 중..."}
         </h1>
         <p className="text-gray-500 text-sm mb-6">
-          {STATUS_MESSAGES[reportStatus] || "처리 중입니다..."}
+          {STATUS_MESSAGES[reportStatus]}
         </p>
 
         {/* 단계 표시 */}
