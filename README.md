@@ -41,15 +41,19 @@ npm run dev
 
 프론트엔드: http://localhost:3000
 
-### 3. 파이프라인 테스트 (결제 없이 PDF 생성 확인)
+### 3. 테스트 실행
 
 ```bash
 cd backend
+
+# 단위 테스트 (네트워크·API 없이 실행)
+pytest -v
+
+# 파이프라인 전체 확인 (PDF 생성 — test_report.pdf 파일이 생성됩니다)
 python test_pipeline.py
-# test_report.pdf 파일이 생성됩니다
 ```
 
-`python` 명령을 찾을 수 없는 환경에서는 아래의 [로컬 문제 해결](#로컬-문제-해결)을 참고하세요.
+`python` 명령을 찾을 수 없는 환경에서는 로컬 문제 해결 섹션을 참고하세요.
 
 ---
 
@@ -141,7 +145,7 @@ npx vercel --prod
 
 ## 로컬 문제 해결
 
-Python 실행 경로, Git 전역 ignore 권한 경고, Toss 결제 모듈 로드 실패는 [TROUBLESHOOTING.md](./TROUBLESHOOTING.md)를 참고하세요.
+Python 실행 경로, Git 전역 ignore 권한 경고, Toss 결제 모듈 로드 실패는 아래를 참고하세요.
 
 ---
 
@@ -172,7 +176,14 @@ portfolio-report/
 │   ├── generated_reports/        # 로컬 PDF 저장 (개발)
 │   ├── requirements.txt          # 프로덕션 의존성
 │   ├── requirements-dev.txt      # 개발·테스트 의존성 (pytest)
-│   └── test_pipeline.py          # 파이프라인 테스트
+│   ├── pytest.ini                # pytest 설정
+│   ├── conftest.py               # 공용 fixture
+│   ├── test_pipeline.py          # 파이프라인 통합 테스트 (PDF 생성)
+│   ├── test_ai_engine.py         # ai_engine 단위 테스트
+│   ├── test_fallback_analyzer.py # fallback_analyzer 단위 테스트
+│   ├── test_chart_generator.py   # chart_generator 스모크 테스트
+│   ├── test_pdf_generator.py     # pdf_generator 스모크 테스트
+│   └── test_market_data.py       # market_data 단위 테스트
 │
 └── frontend/
     ├── app/
