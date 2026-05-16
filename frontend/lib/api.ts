@@ -1,5 +1,10 @@
 import type {
   AnalyzeRequest,
+  ApiError,
+  GenerateReportResponse,
+  PaymentConfirmParams,
+  PaymentConfirmResponse,
+  PaymentRequestResponse,
   PreviewResponse,
   ReportStatusResponse,
 } from "@/types/portfolio";
@@ -14,8 +19,8 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: res.statusText }));
-    const err = new Error(error.detail || `API 오류: ${res.status}`);
-    (err as any).httpStatus = res.status;
+    const err = new Error(error.detail || `API 오류: ${res.status}`) as ApiError;
+    err.httpStatus = res.status;
     throw err;
   }
 
@@ -29,50 +34,29 @@ export async function analyzePortfolio(req: AnalyzeRequest): Promise<PreviewResp
   });
 }
 
-export async function requestPayment(analyzeRequest: AnalyzeRequest): Promise<{
-  order_id: string;
-  amount: number;
-  client_key: string;
-  is_free: boolean;
-}> {
-  return apiFetch("/payment/request", {
+export async function requestPayment(analyzeRequest: AnalyzeRequest): Promise<PaymentRequestResponse> {
+  return apiFetch<PaymentRequestResponse>("/payment/request", {
     method: "POST",
     body: JSON.stringify({ analyze_request: analyzeRequest }),
   });
 }
 
-export async function confirmPayment(params: {
-  payment_key: string;
-  order_id: string;
-  amount: number;
-}): Promise<{
-  success: boolean;
-  report_token: string;
-  message: string;
-}> {
-  return apiFetch("/payment/confirm", {
+export async function confirmPayment(params: PaymentConfirmParams): Promise<PaymentConfirmResponse> {
+  return apiFetch<PaymentConfirmResponse>("/payment/confirm", {
     method: "POST",
     body: JSON.stringify(params),
   });
 }
 
-export async function freeConfirmPayment(orderId: string): Promise<{
-  success: boolean;
-  report_token: string;
-  message: string;
-}> {
-  return apiFetch("/payment/free-confirm", {
+export async function freeConfirmPayment(orderId: string): Promise<PaymentConfirmResponse> {
+  return apiFetch<PaymentConfirmResponse>("/payment/free-confirm", {
     method: "POST",
     body: JSON.stringify({ order_id: orderId }),
   });
 }
 
-export async function generateReport(reportToken: string): Promise<{
-  report_token: string;
-  status: string;
-  message: string;
-}> {
-  return apiFetch("/report/generate", {
+export async function generateReport(reportToken: string): Promise<GenerateReportResponse> {
+  return apiFetch<GenerateReportResponse>("/report/generate", {
     method: "POST",
     body: JSON.stringify({ report_token: reportToken }),
   });

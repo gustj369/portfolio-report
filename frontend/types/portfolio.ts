@@ -61,7 +61,7 @@ export interface MarketSnapshot {
 
 export interface PreviewResponse {
   risk_score: number;
-  risk_grade: string;
+  risk_grade: RiskTolerance;
   base_scenario_final: number;
   base_scenario_cagr: number;
   portfolio_summary: string;
@@ -76,4 +76,33 @@ export interface ReportStatusResponse {
   status: ReportStatus;
   download_url?: string;
   error_message?: string;
+}
+
+export interface ApiError extends Error {
+  httpStatus: number;
+}
+
+export interface PaymentRequestResponse {
+  order_id: string;
+  amount: number;
+  client_key: string;
+  is_free: boolean;
+}
+
+export interface PaymentConfirmParams {
+  payment_key: string;
+  order_id: string;
+  amount: number;
+}
+
+export interface PaymentConfirmResponse {
+  success: boolean;
+  report_token: string;
+  message: string;
+}
+
+export interface GenerateReportResponse {
+  report_token: string;
+  status: string;
+  message: string;
 }
