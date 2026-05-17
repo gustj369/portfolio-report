@@ -1,9 +1,13 @@
 """
 5년 복리 시뮬레이션 (3개 시나리오: 비관/기본/낙관)
 """
+import logging
+
 from models.portfolio import Portfolio
 from models.report import SimulationResult, ScenarioResult
 from services.market_data import get_weighted_return_and_vol, MarketSnapshot
+
+logger = logging.getLogger(__name__)
 
 # 승수: bear=0.6(기본 수익률의 60%), base=1.0(그대로), bull=1.4(140%)
 SCENARIOS = {
@@ -51,7 +55,12 @@ def run_simulation(
     for scenario_key, (scenario_name, multiplier) in SCENARIOS.items():
         annual_return = base_return * multiplier
         if scenario_key == "bull":
+            capped = annual_return > _BULL_RETURN_CAP
             annual_return = min(annual_return, _BULL_RETURN_CAP)
+            if capped:
+                logger.debug(
+                    f"낙관 시나리오 수익률 상한 적용: {base_return * multiplier:.4f} → {annual_return:.4f}"
+                )
         scenario_result = _simulate_scenario(
             name=scenario_name,
             initial_value=initial_value,
@@ -166,4 +175,8 @@ def calculate_risk_score(
     else:
         grade = "공격형"
 
+    logger.debug(
+        f"리스크 점수: {score} ({grade}) "
+        f"[변동성={vol_score} 위험={risky_score} 집중도={concentration_penalty} 다양성=-{diversity_bonus}]"
+    )
     return score, grade
