@@ -14,6 +14,7 @@ venv/
 dist/
 build/
 .pytest_cache/
+.coverage
 
 # 생성된 PDF 파일
 backend/generated_reports/
@@ -35,3 +36,6 @@ Thumbs.db
 .idea/
 *.swp
 frontend/tsconfig.tsbuildinfo
+
+# Claude Code 세션 데이터
+.claude/
