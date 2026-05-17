@@ -17,6 +17,7 @@
 import json
 import time
 import logging
+import os
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
@@ -59,6 +60,24 @@ def _reset_redis_cache() -> None:
     """Redis operation 실패 시 캐시 무효화 — 다음 호출에서 재연결 시도 (장기 장애 복구 지원)"""
     global _redis_client_cache
     _redis_client_cache = None
+
+
+def _redis_required() -> bool:
+    """REDIS_URL 설정 여부 확인. 설정된 환경에서는 Redis 장애를 호출부로 전파한다."""
+    if os.getenv("REDIS_URL") or os.getenv("redis_url"):
+        return True
+    try:
+        from config import get_settings
+        return bool(get_settings().redis_url)
+    except Exception:
+        return False
+
+
+def _raise_redis_required_error(action: str, error: Exception | None = None) -> None:
+    message = f"Redis is configured but storage {action} failed"
+    if error is None:
+        raise RuntimeError(message)
+    raise RuntimeError(message) from error
 
 
 def _local_get_raw(key: str) -> Optional[str]:
@@ -122,12 +141,16 @@ def storage_set(key: str, value: Any, ttl: int = 86400 * 7) -> None:
         try:
             r.set(key, serialized, ex=ttl)
         except Exception as e:
-            logger.warning(f"Redis set 실패 — 캐시 무효화 후 인메모리 fallback 사용: {e}")
+            logger.warning(f"Redis set 실패 — 캐시 무효화: {e}")
             _reset_redis_cache()
+            if _redis_required():
+                _raise_redis_required_error("set", e)
             _gc_local()  # Redis 장애 후 인메모리 사용 시에도 GC 실행
             _local[key] = (serialized, expire_ts)
             logger.debug(f"인메모리 fallback 저장 완료 (Redis 장애 후): key={key!r}")
     else:
+        if _redis_required():
+            _raise_redis_required_error("set")
         _gc_local()  # 인메모리 저장 시 주기적 GC 실행
         _local[key] = (serialized, expire_ts)
         logger.debug(f"인메모리 저장 완료 (Redis 미설정): key={key!r}")
@@ -140,11 +163,15 @@ def storage_get(key: str) -> Optional[Any]:
         if r:
             raw = r.get(key)
         else:
+            if _redis_required():
+                _raise_redis_required_error("get")
             raw = _local_get_raw(key)
             logger.debug(f"인메모리 get 완료 (Redis 미설정): key={key!r}")
     except Exception as e:
-        logger.warning(f"Redis get 실패 — 캐시 무효화 후 인메모리 fallback 사용: {e}")
+        logger.warning(f"Redis get 실패 — 캐시 무효화: {e}")
         _reset_redis_cache()
+        if _redis_required():
+            _raise_redis_required_error("get", e)
         raw = _local_get_raw(key)
         logger.debug(f"인메모리 fallback get 완료 (Redis 장애 후): key={key!r}")
     if raw is None:
@@ -165,11 +192,15 @@ def storage_delete(key: str) -> None:
         try:
             r.delete(key)
         except Exception as e:
-            logger.warning(f"Redis delete 실패 — 캐시 무효화 후 인메모리에서만 삭제: {e}")
+            logger.warning(f"Redis delete 실패 — 캐시 무효화: {e}")
             _reset_redis_cache()
+            if _redis_required():
+                _raise_redis_required_error("delete", e)
             _local.pop(key, None)
             logger.debug(f"인메모리 fallback 삭제 완료 (Redis 장애 후): key={key!r}")
     else:
+        if _redis_required():
+            _raise_redis_required_error("delete")
         _local.pop(key, None)
         logger.debug(f"인메모리 삭제 완료 (Redis 미설정): key={key!r}")
 
@@ -181,11 +212,147 @@ def storage_exists(key: str) -> bool:
         try:
             return bool(r.exists(key))
         except Exception as e:
-            logger.warning(f"Redis exists 실패 — 캐시 무효화 후 인메모리 fallback 사용: {e}")
+            logger.warning(f"Redis exists 실패 — 캐시 무효화: {e}")
             _reset_redis_cache()
+            if _redis_required():
+                _raise_redis_required_error("exists", e)
             result = _local_get_raw(key) is not None
             logger.debug(f"인메모리 fallback exists 확인 (Redis 장애 후): key={key!r} → {result}")
             return result
+    if _redis_required():
+        _raise_redis_required_error("exists")
     result = _local_get_raw(key) is not None
     logger.debug(f"인메모리 exists 확인 (Redis 미설정): key={key!r} → {result}")
     return result
+
+
+def storage_acquire_lock(key: str, owner: str, ttl: int = 300) -> bool:
+    """짧은 TTL 잠금 획득. 이미 잠겨 있으면 False를 반환한다."""
+    serialized = json.dumps({"owner": owner}, ensure_ascii=False, default=str)
+    expire_ts = time.time() + ttl
+    r = _get_redis()
+    if r:
+        try:
+            return bool(r.set(key, serialized, ex=ttl, nx=True))
+        except Exception as e:
+            logger.warning(f"Redis lock 획득 실패 — 캐시 무효화: {e}")
+            _reset_redis_cache()
+            if _redis_required():
+                _raise_redis_required_error("lock acquire", e)
+    else:
+        if _redis_required():
+            _raise_redis_required_error("lock acquire")
+
+    if _local_get_raw(key) is not None:
+        return False
+    _local[key] = (serialized, expire_ts)
+    return True
+
+
+def storage_release_lock(key: str, owner: str) -> bool:
+    """owner가 일치하는 잠금만 해제한다. 해제 성공 시 True."""
+    serialized = json.dumps({"owner": owner}, ensure_ascii=False, default=str)
+    r = _get_redis()
+    if r:
+        try:
+            release_script = """
+            if redis.call("GET", KEYS[1]) == ARGV[1] then
+                return redis.call("DEL", KEYS[1])
+            end
+            return 0
+            """
+            return bool(r.eval(release_script, 1, key, serialized))
+        except Exception as e:
+            logger.warning(f"Redis lock 해제 실패 — 캐시 무효화: {e}")
+            _reset_redis_cache()
+            if _redis_required():
+                _raise_redis_required_error("lock release", e)
+    else:
+        if _redis_required():
+            _raise_redis_required_error("lock release")
+
+    current = _local_get_raw(key)
+    if current != serialized:
+        return False
+    _local.pop(key, None)
+    return True
+
+
+def storage_confirm_payment_recovery(
+    order_id: str,
+    report_token: str,
+    confirmed_record: dict,
+    idempotency_record: dict,
+    ttl: int = 86400 * 7,
+) -> dict:
+    """복구 스크립트 전용 저장 helper.
+
+    순서는 idempotency 선점, confirmed 저장, pending 삭제이다.
+    Redis 사용 시 WATCH/MULTI로 중복 복구를 막고, 로컬 fallback에서도 같은 조건을 확인한다.
+    """
+    pending_key = f"pay:pending:{order_id}"
+    idempotency_key = f"pay:idempotency:{order_id}"
+    confirmed_key = f"pay:confirmed:{report_token}"
+    r = _get_redis()
+
+    if r:
+        try:
+            with r.pipeline() as pipe:
+                while True:
+                    try:
+                        pipe.watch(pending_key, idempotency_key, confirmed_key)
+                        if pipe.get(pending_key) is None:
+                            pipe.unwatch()
+                            return {"ok": False, "reason": "pending missing"}
+                        if pipe.get(idempotency_key) is not None:
+                            pipe.unwatch()
+                            return {"ok": False, "reason": "idempotency exists"}
+                        if pipe.get(confirmed_key) is not None:
+                            pipe.unwatch()
+                            return {"ok": False, "reason": "confirmed exists"}
+
+                        pipe.multi()
+                        pipe.set(
+                            idempotency_key,
+                            json.dumps(idempotency_record, ensure_ascii=False, default=str),
+                            ex=ttl,
+                        )
+                        pipe.set(
+                            confirmed_key,
+                            json.dumps(confirmed_record, ensure_ascii=False, default=str),
+                            ex=ttl,
+                        )
+                        pipe.delete(pending_key)
+                        pipe.execute()
+                        return {"ok": True, "report_token": report_token}
+                    except Exception as e:
+                        if e.__class__.__name__ == "WatchError":
+                            continue
+                        raise
+        except Exception as e:
+            logger.warning(f"Redis payment recovery 저장 실패 — 캐시 무효화: {e}")
+            _reset_redis_cache()
+            if _redis_required():
+                _raise_redis_required_error("payment recovery confirm", e)
+    else:
+        if _redis_required():
+            _raise_redis_required_error("payment recovery confirm")
+
+    if _local_get_raw(pending_key) is None:
+        return {"ok": False, "reason": "pending missing"}
+    if _local_get_raw(idempotency_key) is not None:
+        return {"ok": False, "reason": "idempotency exists"}
+    if _local_get_raw(confirmed_key) is not None:
+        return {"ok": False, "reason": "confirmed exists"}
+
+    expire_ts = time.time() + ttl
+    _local[idempotency_key] = (
+        json.dumps(idempotency_record, ensure_ascii=False, default=str),
+        expire_ts,
+    )
+    _local[confirmed_key] = (
+        json.dumps(confirmed_record, ensure_ascii=False, default=str),
+        expire_ts,
+    )
+    _local.pop(pending_key, None)
+    return {"ok": True, "report_token": report_token}

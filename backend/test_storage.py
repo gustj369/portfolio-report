@@ -259,3 +259,59 @@ class TestRedisFallback:
         self._inject_failing_redis("exists")
         assert storage_exists("fb4") is True
         assert storage_mod._redis_client_cache is None
+
+
+# ──────────────────────────────────────────────────────────────
+# 잠금 / 결제 복구 (storage_acquire_lock, storage_release_lock,
+#                   storage_confirm_payment_recovery)
+# ──────────────────────────────────────────────────────────────
+
+class TestLockAndPaymentRecovery:
+    """인메모리 환경에서 잠금과 결제 복구 원자적 처리를 검증한다."""
+
+    def test_local_lock_acquire_blocks_duplicate_owner(self):
+        """같은 키를 동일 소유자가 재획득 시도하면 False를 반환해야 한다"""
+        assert storage_mod.storage_acquire_lock("lock:test", "owner-1", ttl=60) is True
+        assert storage_mod.storage_acquire_lock("lock:test", "owner-1", ttl=60) is False
+
+    def test_local_lock_release_requires_same_owner(self):
+        """다른 소유자는 잠금을 해제할 수 없어야 한다"""
+        storage_mod.storage_acquire_lock("lock:test", "owner-1", ttl=60)
+        assert storage_mod.storage_release_lock("lock:test", "owner-2") is False
+        assert storage_mod.storage_release_lock("lock:test", "owner-1") is True
+        # 해제 후 다른 소유자가 획득 가능해야 한다
+        assert storage_mod.storage_acquire_lock("lock:test", "owner-2", ttl=60) is True
+
+    def test_local_payment_recovery_confirm_writes_in_safe_order(self):
+        """결제 복구 확정이 올바른 순서로 저장되어야 한다"""
+        storage_set("pay:pending:order_test", {"amount": 4900}, ttl=60)
+
+        result = storage_mod.storage_confirm_payment_recovery(
+            order_id="order_test",
+            report_token="rpt_test",
+            confirmed_record={"order_id": "order_test", "amount": 4900},
+            idempotency_record={"report_token": "rpt_test"},
+            ttl=60,
+        )
+
+        assert result["ok"] is True
+        assert storage_get("pay:pending:order_test") is None
+        assert storage_get("pay:idempotency:order_test")["report_token"] == "rpt_test"
+        assert storage_get("pay:confirmed:rpt_test")["order_id"] == "order_test"
+
+    def test_local_payment_recovery_confirm_blocks_duplicate(self):
+        """이미 멱등성 키가 있으면 중복 결제 확정을 차단해야 한다"""
+        storage_set("pay:pending:order_test", {"amount": 4900}, ttl=60)
+        storage_set("pay:idempotency:order_test", {"report_token": "rpt_old"}, ttl=60)
+
+        result = storage_mod.storage_confirm_payment_recovery(
+            order_id="order_test",
+            report_token="rpt_new",
+            confirmed_record={"order_id": "order_test", "amount": 4900},
+            idempotency_record={"report_token": "rpt_new"},
+            ttl=60,
+        )
+
+        assert result["ok"] is False
+        assert result["reason"] == "idempotency exists"
+        assert storage_get("pay:confirmed:rpt_new") is None
