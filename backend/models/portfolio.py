@@ -37,6 +37,14 @@ class UserProfile(BaseModel):
     name: str = ""
     email: str = ""
 
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        """이메일 형식 기본 검증 — 빈 문자열은 허용(선택 입력), 값이 있으면 '@' 포함 여부 확인."""
+        if v and "@" not in v:
+            raise ValueError("유효하지 않은 이메일 주소입니다 ('@' 가 포함되어야 합니다)")
+        return v
+
 
 class Allocation(BaseModel):
     asset_name: str

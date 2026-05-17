@@ -68,7 +68,7 @@ def _post(extra_patches: dict, settings: Settings | None = None) -> object:
     """
     # 외부 I/O 기본 격리 패치 (모든 테스트 공통)
     base = {
-        "routers.analyze.fetch_market_snapshot": MagicMock(return_value=_market()),
+        "routers.analyze.fetch_market_snapshot_cached": MagicMock(return_value=_market()),
         "routers.analyze.run_simulation": MagicMock(return_value=_simulation()),
         "routers.analyze.calculate_risk_score": MagicMock(return_value=(50, "중립형")),
         "services.fallback_analyzer.generate_personalized_preview_summary": MagicMock(
@@ -197,9 +197,9 @@ def test_analyze_simulation_value_error_returns_422():
 
 
 def test_analyze_market_fetch_error_returns_500():
-    """fetch_market_snapshot 에서 예기치 않은 예외 → 500 반환"""
+    """fetch_market_snapshot_cached 에서 예기치 않은 예외 → 500 반환"""
     resp = _post(
-        {"routers.analyze.fetch_market_snapshot": MagicMock(side_effect=RuntimeError("네트워크 오류"))},
+        {"routers.analyze.fetch_market_snapshot_cached": MagicMock(side_effect=RuntimeError("네트워크 오류"))},
         settings=Settings(gemini_api_key=""),
     )
     assert resp.status_code == 500

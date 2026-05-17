@@ -30,3 +30,6 @@ redis>=5.0.0
 
 # 오류 추적 (선택 — SENTRY_DSN 설정 시 활성화, 미설정이면 no-op)
 sentry-sdk>=2.0.0
+
+# Rate limiting — /analyze 등 AI 비용 보호 (IP 기반, 분당 횟수 제한)
+slowapi>=0.1.9

@@ -16,7 +16,7 @@ from config import get_settings, Settings
 from models.portfolio import AnalyzeRequest
 from models.report import ReportRecord, ReportStatus
 from services.storage import storage_set, storage_get
-from services.market_data import fetch_market_snapshot
+from services.market_data import fetch_market_snapshot_cached
 from services.simulator import run_simulation, calculate_risk_score
 from services.ai_engine import generate_full_analysis
 from services.chart_generator import (
@@ -285,7 +285,7 @@ async def _generate_report_background(
         # 1. 시장 데이터 수집 (네트워크 I/O — run_in_executor로 이벤트 루프 블로킹 방지)
         logger.info(f"[{report_token}] 시장 데이터 수집 시작")
         loop = asyncio.get_running_loop()
-        market_snapshot = await loop.run_in_executor(None, fetch_market_snapshot, settings.fred_api_key)
+        market_snapshot = await loop.run_in_executor(None, fetch_market_snapshot_cached, settings.fred_api_key)
         logger.info(f"[{report_token}] 시장 데이터 수집 완료 ({time.perf_counter()-t0:.2f}s)")
 
         # 2. 시뮬레이션

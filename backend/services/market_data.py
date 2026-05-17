@@ -529,6 +529,37 @@ def _fetch_historical_stats(ticker: str) -> tuple[float, float]:
     return annual_return, annual_vol
 
 
+_MARKET_CACHE_KEY = "market:snapshot"
+_MARKET_CACHE_TTL = 300  # 5분 — 시장 데이터는 분 단위로 변하므로 5분 캐싱으로 충분
+
+
+def fetch_market_snapshot_cached(fred_api_key: str = "") -> MarketSnapshot:
+    """시장 데이터 스냅샷 수집 (5분 캐시 적용).
+
+    캐시 히트 시 storage에서 즉시 반환, 미스 시 fetch_market_snapshot 호출 후 캐시 저장.
+    /analyze 와 PDF 생성 백그라운드 태스크가 같은 캐시를 공유하므로 중복 네트워크 요청 방지.
+    """
+    from services.storage import storage_get, storage_set
+
+    cached = storage_get(_MARKET_CACHE_KEY)
+    if cached is not None:
+        try:
+            snapshot = MarketSnapshot.model_validate(cached)
+            logger.debug(f"시장 데이터 캐시 히트 (fetched_at={cached.get('fetched_at')})")
+            return snapshot
+        except Exception as e:
+            logger.warning(f"시장 데이터 캐시 역직렬화 실패 — 재수집: {e}")
+
+    snapshot = fetch_market_snapshot(fred_api_key)
+    try:
+        storage_set(_MARKET_CACHE_KEY, snapshot.model_dump(mode="json"), ttl=_MARKET_CACHE_TTL)
+        logger.debug("시장 데이터 캐시 저장 완료")
+    except Exception as e:
+        logger.warning(f"시장 데이터 캐시 저장 실패 (무시): {e}")
+
+    return snapshot
+
+
 def get_weighted_return_and_vol(
     allocations: list[Allocation],
     market_snapshot: MarketSnapshot,
