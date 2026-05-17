@@ -67,7 +67,31 @@ app.include_router(report.router)
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok", "service": "portfolio-ai-report"}
+    # 스토리지 모드 판별 (lifespan 로그와 동일한 분기)
+    if settings.use_local_storage:
+        storage_mode = "local"
+    elif settings.r2_account_id and settings.r2_access_key:
+        storage_mode = "r2"
+    elif settings.aws_access_key_id:
+        storage_mode = "s3"
+    else:
+        storage_mode = "local"
+
+    # Redis 연결 여부 — _get_redis() 재사용 (새 연결 없이 캐시 반환)
+    from services.storage import _get_redis
+    try:
+        r = _get_redis()
+        redis_status = "connected" if r is not None else "not_configured"
+    except Exception:
+        redis_status = "disconnected"
+
+    return {
+        "status": "ok",
+        "service": "portfolio-ai-report",
+        "version": app.version,
+        "storage_mode": storage_mode,
+        "redis": redis_status,
+    }
 
 
 @app.get("/")
