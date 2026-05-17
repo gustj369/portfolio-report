@@ -90,7 +90,7 @@ def _mock_toss_client(status_code: int, body: dict):
 def test_request_returns_order_id_and_fields():
     """기본 요청 → order_id·amount·client_key·is_free 반환"""
     app.dependency_overrides[get_settings] = lambda: Settings(
-        report_price_krw=9900, toss_client_key="test_ck"
+        report_price_krw=9900, toss_client_key="test_ck", toss_secret_key="sk_test_xxx"
     )
     try:
         with patch("routers.payment.storage_set"):
@@ -163,21 +163,21 @@ def test_confirm_amount_mismatch_returns_400():
     assert "금액" in resp.json()["detail"]
 
 
-def test_confirm_dev_mode_no_toss_key_succeeds():
-    """toss_secret_key=''(개발 모드) → Toss 건너뜀, 200 + report_token"""
+def test_confirm_dev_mode_no_toss_key_returns_503():
+    """toss_secret_key=''(미설정) + 유료 금액 → 설정 오류 503 반환"""
     sg = _storage_get_factory(pending=_PENDING)
-    with (
-        patch("routers.payment.storage_get", side_effect=sg),
-        patch("routers.payment._commit_payment", return_value="rpt_dev"),
-    ):
-        with TestClient(app) as c:
-            resp = c.post(CONFIRM_URL, json={
-                "payment_key": "pk", "order_id": ORDER_ID, "amount": 9900,
-            })
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["report_token"] == "rpt_dev"
-    assert body["success"] is True
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        toss_secret_key="", report_price_krw=9900
+    )
+    try:
+        with patch("routers.payment.storage_get", side_effect=sg):
+            with TestClient(app) as c:
+                resp = c.post(CONFIRM_URL, json={
+                    "payment_key": "pk", "order_id": ORDER_ID, "amount": 9900,
+                })
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
+    assert resp.status_code == 503
 
 
 def test_confirm_toss_4xx_returns_400():
@@ -281,17 +281,18 @@ def test_free_confirm_paid_order_returns_400():
 
 
 def test_free_confirm_success():
-    """무료(amount=0) 정상 요청 → 200 + report_token"""
+    """무료(amount=0) 정상 요청 → 200 + report_token(rpt_ 접두사)"""
     sg = _storage_get_factory(pending=_FREE_PENDING)
     with (
         patch("routers.payment.storage_get", side_effect=sg),
-        patch("routers.payment._commit_payment", return_value="rpt_free"),
+        patch("routers.payment.storage_set"),
+        patch("routers.payment.storage_delete"),
     ):
         with TestClient(app) as c:
             resp = c.post(FREE_CONFIRM_URL, json={"order_id": ORDER_ID})
     assert resp.status_code == 200
     body = resp.json()
-    assert body["report_token"] == "rpt_free"
+    assert body["report_token"].startswith("rpt_")
     assert body["success"] is True
 
 
