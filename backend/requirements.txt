@@ -27,3 +27,9 @@ boto3>=1.35.74
 # Redis — 세션 데이터 영속성 (Upstash 등 무료 Redis 사용 가능)
 # 미설치 시 인메모리 fallback 동작 (개발 환경)
 redis>=5.0.0
+
+# 오류 추적 (선택 — SENTRY_DSN 설정 시 활성화, 미설정이면 no-op)
+sentry-sdk>=2.0.0
+
+# Rate limiting — /analyze 등 AI 비용 보호 (IP 기반, 분당 횟수 제한)
+slowapi>=0.1.9

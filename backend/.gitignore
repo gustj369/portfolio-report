@@ -1,0 +1,5 @@
+# pytest-cov 생성 파일
+.coverage
+
+# pip install 오타 부산물 (예: pip install ">=5.0.0" → =5.0.0 파일 생성)
+=*

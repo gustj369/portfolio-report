@@ -149,8 +149,11 @@ export default function LandingPage() {
 
       {/* 협업 문의 및 후원 */}
       <section className="py-10 px-4 bg-gray-50 text-center">
-        <p className="text-sm font-semibold text-gray-700 mb-2">협업 문의 및 후원 계좌</p>
-        <p className="text-sm text-gray-600">카카오페이증권 계좌 번호: 02005793329</p>
+        <p className="text-sm font-semibold text-gray-700 mb-2">협업 문의 및 응원하기</p>
+        <p className="text-sm text-gray-600 mb-1">
+          이 자료가 도움이 되셨다면<br />커피 한 잔으로 응원해주셔도 좋아요.
+        </p>
+        <p className="text-sm text-gray-600">카카오페이 후원 · 박현서 · 02005793329</p>
       </section>
 
       {/* 면책 고지 */}
@@ -158,7 +161,7 @@ export default function LandingPage() {
         <p>
           본 서비스는 정보 제공 목적이며, 투자 권유 또는 투자 자문에 해당하지 않습니다.
           <br />
-          모든 투자에는 원금 손실의 위험이 있습니다. © 2024 포트폴리오 AI 리포트
+          모든 투자에는 원금 손실의 위험이 있습니다. © 2026 포트폴리오 AI 리포트
         </p>
       </footer>
     </div>

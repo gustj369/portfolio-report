@@ -11,6 +11,14 @@ import type {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+// 개발 모드에서 환경변수 미설정 시 경고 — 프로덕션은 next.config.ts 빌드 가드가 차단
+if (process.env.NODE_ENV === "development" && !process.env.NEXT_PUBLIC_API_URL) {
+  console.warn(
+    "[api] NEXT_PUBLIC_API_URL is not set. Falling back to http://localhost:8000.\n" +
+      "Create frontend/.env.local and set NEXT_PUBLIC_API_URL to suppress this warning."
+  );
+}
+
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     headers: { "Content-Type": "application/json" },
@@ -68,4 +76,13 @@ export async function getReportStatus(reportToken: string): Promise<ReportStatus
 
 export function getDownloadUrl(reportToken: string): string {
   return `${API_URL}/report/download/${reportToken}`;
+}
+
+/**
+ * 백엔드 download_url을 절대 URL로 변환.
+ * - "http"로 시작하면 그대로 반환 (S3 presigned URL 등 외부 절대 URL)
+ * - 상대 경로면 API_URL을 접두어로 추가 (R2 프록시 "/report/download/…", 로컬 "/report/file/…")
+ */
+export function resolveDownloadUrl(downloadUrl: string): string {
+  return downloadUrl.startsWith("http") ? downloadUrl : `${API_URL}${downloadUrl}`;
 }

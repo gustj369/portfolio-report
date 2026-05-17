@@ -16,7 +16,7 @@ from config import get_settings, Settings
 from models.portfolio import AnalyzeRequest
 from models.report import ReportRecord, ReportStatus
 from services.storage import storage_set, storage_get
-from services.market_data import fetch_market_snapshot
+from services.market_data import fetch_market_snapshot_cached
 from services.simulator import run_simulation, calculate_risk_score
 from services.ai_engine import generate_full_analysis
 from services.chart_generator import (
@@ -26,17 +26,14 @@ from services.chart_generator import (
     generate_rebalancing_comparison_chart,
 )
 from services.pdf_generator import build_report
-from routers.payment import get_confirmed_payment
+from services.payment_store import get_confirmed_payment
+from services.file_storage import save_pdf, load_pdf_bytes, LOCAL_REPORTS_DIR
 
 router = APIRouter(prefix="/report", tags=["report"])
 logger = logging.getLogger(__name__)
 
 # 스토리지 키 접두사
 _RECORD_PFX = "report:record:"
-
-# 로컬 저장 디렉토리 (개발용)
-LOCAL_REPORTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "generated_reports")
-os.makedirs(LOCAL_REPORTS_DIR, exist_ok=True)
 
 
 def _save_record(record: ReportRecord) -> None:
@@ -238,32 +235,18 @@ async def download_report(report_token: str, settings: Settings = Depends(get_se
 
     filename = f"report_{report_token}.pdf"
 
-    # R2에서 읽어 스트리밍
-    if settings.r2_account_id and settings.r2_access_key and settings.r2_secret_key:
-        import boto3
-        from fastapi.responses import StreamingResponse
-        import io
-        s3 = boto3.client(
-            "s3",
-            endpoint_url=f"https://{settings.r2_account_id}.r2.cloudflarestorage.com",
-            aws_access_key_id=settings.r2_access_key,
-            aws_secret_access_key=settings.r2_secret_key,
-            region_name="auto",
-        )
-        s3_key = f"reports/{report_token}/{filename}"
-        _dl_loop = asyncio.get_running_loop()
-        obj = await _dl_loop.run_in_executor(
-            None, lambda: s3.get_object(Bucket=settings.r2_bucket, Key=s3_key)
-        )
-        pdf_bytes = obj["Body"].read()
+    # R2에서 읽어 스트리밍 — services/file_storage.py 에서 백엔드 판별
+    import io
+    from fastapi.responses import StreamingResponse, FileResponse
+    pdf_bytes = await load_pdf_bytes(report_token, settings)
+    if pdf_bytes is not None:
         return StreamingResponse(
             io.BytesIO(pdf_bytes),
             media_type="application/pdf",
             headers={"Content-Disposition": f"attachment; filename={filename}"},
         )
 
-    # 로컬 파일 서빙
-    from fastapi.responses import FileResponse
+    # 로컬 파일 서빙 (R2 미설정 시)
     filepath = os.path.join(LOCAL_REPORTS_DIR, filename)
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
@@ -302,7 +285,7 @@ async def _generate_report_background(
         # 1. 시장 데이터 수집 (네트워크 I/O — run_in_executor로 이벤트 루프 블로킹 방지)
         logger.info(f"[{report_token}] 시장 데이터 수집 시작")
         loop = asyncio.get_running_loop()
-        market_snapshot = await loop.run_in_executor(None, fetch_market_snapshot, settings.fred_api_key)
+        market_snapshot = await loop.run_in_executor(None, fetch_market_snapshot_cached, settings.fred_api_key)
         logger.info(f"[{report_token}] 시장 데이터 수집 완료 ({time.perf_counter()-t0:.2f}s)")
 
         # 2. 시뮬레이션
@@ -311,15 +294,57 @@ async def _generate_report_background(
 
         # 3. 전체 AI 분석 (Gemini time.sleep 포함 — run_in_executor로 이벤트 루프 블로킹 방지)
         logger.info(f"[{report_token}] AI 분석 시작 ({time.perf_counter()-t0:.2f}s)")
+        from services.fallback_analyzer import generate_personalized_content
+
         if settings.gemini_api_key:
-            ai_content = await loop.run_in_executor(
-                None, generate_full_analysis,
-                analyze_req.user_profile, analyze_req.portfolio,
-                simulation, market_snapshot, settings.gemini_api_key,
-            )
-            logger.info(f"[{report_token}] Gemini AI 분석 사용 ({time.perf_counter()-t0:.2f}s)")
+            # 최대 3회 시도 (초기 1회 + 재시도 2회) — 일시적 Gemini 오류 대응
+            # ※ _call_gemini 자체가 rate limit·timeout을 3회 재시도하므로
+            #   이 레이어는 클라이언트 초기화 실패 등 외부 예외를 추가로 방어함
+            _MAX_AI_ATTEMPTS = 3
+            _ai_last_exc: Exception | None = None
+            for _attempt in range(_MAX_AI_ATTEMPTS):
+                try:
+                    ai_content = await loop.run_in_executor(
+                        None, generate_full_analysis,
+                        analyze_req.user_profile, analyze_req.portfolio,
+                        simulation, market_snapshot, settings.gemini_api_key,
+                    )
+                    logger.info(
+                        f"[{report_token}] Gemini AI 분석 완료 "
+                        f"(시도 {_attempt + 1}/{_MAX_AI_ATTEMPTS}, {time.perf_counter()-t0:.2f}s)"
+                    )
+                    _ai_last_exc = None
+                    break
+                except Exception as e:
+                    _ai_last_exc = e
+                    if _attempt < _MAX_AI_ATTEMPTS - 1:
+                        _wait = 5 * (2 ** _attempt)  # 5s → 10s 지수 백오프
+                        logger.warning(
+                            f"[{report_token}] Gemini AI 분석 실패 "
+                            f"(시도 {_attempt + 1}/{_MAX_AI_ATTEMPTS}, {_wait}초 후 재시도): "
+                            f"{type(e).__name__}: {e}"
+                        )
+                        await asyncio.sleep(_wait)
+                    else:
+                        logger.error(
+                            f"[{report_token}] Gemini AI 분석 {_MAX_AI_ATTEMPTS}회 모두 실패 — "
+                            f"fallback 분석으로 전환: {type(e).__name__}: {e}"
+                        )
+
+            if _ai_last_exc is not None:
+                # 모든 재시도 소진 → rule-based fallback으로 최종 전환
+                # 결제 완료 사용자에게 빈 리포트 대신 fallback 내용이라도 전달
+                risk_score, risk_grade = calculate_risk_score(analyze_req.portfolio, market_snapshot)
+                ai_content = await loop.run_in_executor(
+                    None, generate_personalized_content,
+                    analyze_req.user_profile, analyze_req.portfolio,
+                    simulation, market_snapshot, risk_score, risk_grade,
+                )
+                logger.info(
+                    f"[{report_token}] fallback 분석 완료 (AI 재시도 소진 후) "
+                    f"({time.perf_counter()-t0:.2f}s)"
+                )
         else:
-            from services.fallback_analyzer import generate_personalized_content
             risk_score, risk_grade = calculate_risk_score(analyze_req.portfolio, market_snapshot)
             ai_content = await loop.run_in_executor(
                 None, generate_personalized_content,
@@ -358,8 +383,8 @@ async def _generate_report_background(
         ))
         logger.info(f"[{report_token}] PDF 생성 완료 ({time.perf_counter()-t0:.2f}s 누적)")
 
-        # 6. 저장 (로컬 / AWS S3 / Cloudflare R2)
-        download_url = await _save_report(report_token, pdf_bytes, settings)
+        # 6. 저장 (로컬 / AWS S3 / Cloudflare R2) — services/file_storage.py 에서 백엔드 선택
+        download_url = await save_pdf(report_token, pdf_bytes, settings)
         logger.info(f"[{report_token}] 저장 완료 ({time.perf_counter()-t0:.2f}s 누적)")
 
         # 7. 완료 처리
@@ -416,66 +441,19 @@ async def _generate_report_background(
             logger.error(
                 f"[{report_token}] ERROR 상태 저장 실패 — 폴링이 이전 상태를 반환할 수 있음: {save_err}"
             )
-
-
-async def _save_report(report_token: str, pdf_bytes: bytes, settings: Settings) -> str:
-    """PDF 저장 — 로컬(개발) / Cloudflare R2 / AWS S3"""
-    filename = f"report_{report_token}.pdf"
-
-    # Cloudflare R2 우선 — 저장만 하고 백엔드 다운로드 URL 반환 (CORS 우회)
-    if settings.r2_account_id and settings.r2_access_key and settings.r2_secret_key:
-        import boto3
-        s3 = boto3.client(
-            "s3",
-            endpoint_url=f"https://{settings.r2_account_id}.r2.cloudflarestorage.com",
-            aws_access_key_id=settings.r2_access_key,
-            aws_secret_access_key=settings.r2_secret_key,
-            region_name="auto",
-        )
-        s3_key = f"reports/{report_token}/{filename}"
-        _save_loop = asyncio.get_running_loop()
-        await _save_loop.run_in_executor(None, lambda: s3.put_object(
-            Bucket=settings.r2_bucket,
-            Key=s3_key,
-            Body=pdf_bytes,
-            ContentType="application/pdf",
-        ))
-        # presigned URL 대신 백엔드 프록시 URL 반환 (CORS 문제 없음)
-        return f"/report/download/{report_token}"
-
-    # AWS S3
-    if not settings.use_local_storage and settings.aws_access_key_id:
-        import boto3
-        s3 = boto3.client(
-            "s3",
-            aws_access_key_id=settings.aws_access_key_id,
-            aws_secret_access_key=settings.aws_secret_access_key,
-            region_name=settings.aws_region,
-        )
-        s3_key = f"reports/{report_token}/{filename}"
-        _s3_loop = asyncio.get_running_loop()
-        await _s3_loop.run_in_executor(None, lambda: s3.put_object(
-            Bucket=settings.s3_bucket,
-            Key=s3_key,
-            Body=pdf_bytes,
-            ContentType="application/pdf",
-        ))
-        presigned_url = await _s3_loop.run_in_executor(
-            None, lambda: s3.generate_presigned_url(
-                "get_object",
-                Params={"Bucket": settings.s3_bucket, "Key": s3_key},
-                ExpiresIn=86400,
+        # 운영 알림 — ADMIN_ALERT_WEBHOOK_URL 설정 시 Slack 등으로 즉시 전파
+        # 알림 실패가 오류 처리 흐름을 방해하지 않도록 별도 try-except로 감쌈
+        try:
+            from services.alert_service import send_alert
+            send_alert(
+                settings.admin_alert_webhook_url,
+                f"🚨 [포트폴리오 리포트] PDF 생성 실패\n"
+                f"• token: `{report_token}`\n"
+                f"• 오류: {type(e).__name__}: {e}",
             )
-        )
-        return presigned_url
+        except Exception as alert_err:
+            logger.warning(f"[{report_token}] 알림 전송 실패 (무시): {alert_err}")
 
-    # 로컬 저장 (개발 환경)
-    # 반환 경로 "/report/file/{filename}" 는 이 파일 하단의 serve_local_file 라우트
-    # (router prefix "/report" + "/file/{filename}") 와 정확히 일치해야 함.
-    filepath = os.path.join(LOCAL_REPORTS_DIR, filename)
-    with open(filepath, "wb") as f:
-        f.write(pdf_bytes)
-    return f"/report/file/{filename}"
 
 
 @router.get("/file/{filename}")

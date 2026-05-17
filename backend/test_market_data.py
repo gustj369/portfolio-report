@@ -21,16 +21,7 @@ from services.market_data import (
     _adjust_return_for_market,
     get_asset_return,
 )
-
-
-# ── 헬퍼 ─────────────────────────────────────────────────────────────────────
-
-def _snap(**overrides) -> MarketSnapshot:
-    """MARKET_DEFAULTS 기반 MarketSnapshot 생성 (일부 필드만 덮어쓰기 가능)"""
-    fields = dict(MARKET_DEFAULTS)
-    fields["fetched_at"] = datetime.now(timezone.utc)
-    fields.update(overrides)
-    return MarketSnapshot(**fields)
+from conftest import make_market as _snap  # conftest 공용 헬퍼로 대체 (override 지원 동일)
 
 
 def _alloc(asset_type: AssetType, ticker: str | None = None) -> Allocation:
@@ -83,6 +74,49 @@ class TestAdjustReturnForMarket:
         snap_low  = _snap(us_10y_yield=_HIGH_RATE_THRESHOLD - 1.0)
         assert _adjust_return_for_market(0.05, AssetType.ALTERNATIVE, snap_high) == \
                _adjust_return_for_market(0.05, AssetType.ALTERNATIVE, snap_low)
+
+    def test_high_rate_boosts_short_bond(self):
+        """고금리 환경에서 단기채권(SHORT_BOND)도 BOND와 동일한 boost를 받아야 한다 (Fix 3)"""
+        snap_high = _snap(us_10y_yield=_HIGH_RATE_THRESHOLD + 0.1, cpi_us=0.0)
+        snap_low  = _snap(us_10y_yield=_HIGH_RATE_THRESHOLD - 0.1, cpi_us=0.0)
+        diff = (_adjust_return_for_market(0.04, AssetType.SHORT_BOND, snap_high) -
+                _adjust_return_for_market(0.04, AssetType.SHORT_BOND, snap_low))
+        assert abs(diff - _HIGH_RATE_BOND_BOOST) < 1e-9
+
+    def test_cash_not_boosted_in_high_rate(self):
+        """고금리 환경에서 현금(CASH)은 bond boost를 받지 않아야 한다 (Fix 3 — 이전엔 dead code)"""
+        snap_high = _snap(us_10y_yield=_HIGH_RATE_THRESHOLD + 0.1, kr_base_rate=3.5, cpi_us=0.0)
+        snap_low  = _snap(us_10y_yield=_HIGH_RATE_THRESHOLD - 0.1, kr_base_rate=3.5, cpi_us=0.0)
+        # CASH 수익률은 kr_base_rate로 고정되므로 금리 환경과 무관하게 동일해야 함
+        assert _adjust_return_for_market(0.025, AssetType.CASH, snap_high) == \
+               _adjust_return_for_market(0.025, AssetType.CASH, snap_low)
+
+    def test_high_rate_drags_domestic_stock(self):
+        """고금리 환경에서 국내주식(DOMESTIC_STOCK)도 해외주식과 동일한 drag를 받아야 한다"""
+        snap_high = _snap(us_10y_yield=_HIGH_RATE_THRESHOLD + 0.1)
+        snap_low  = _snap(us_10y_yield=_HIGH_RATE_THRESHOLD - 0.1)
+        diff = (_adjust_return_for_market(0.06, AssetType.DOMESTIC_STOCK, snap_high) -
+                _adjust_return_for_market(0.06, AssetType.DOMESTIC_STOCK, snap_low))
+        assert abs(diff + _HIGH_RATE_STOCK_DRAG) < 1e-9
+
+    def test_short_bond_floor_applied_on_high_inflation(self):
+        """단기채권도 인플레이션 극단 상황에서 최소 수익률(_MIN_REAL_RETURN)로 고정된다 (Fix 3)"""
+        snap = _snap(us_10y_yield=3.0, cpi_us=99.0)
+        result = _adjust_return_for_market(0.04, AssetType.SHORT_BOND, snap)
+        assert result == _MIN_REAL_RETURN
+
+    def test_cash_inflation_reduces_return(self):
+        """현금 수익률은 인플레이션만큼 차감되며, 극단 시 _MIN_REAL_RETURN에서 고정된다 (Fix 3)"""
+        # 정상 인플레이션: kr_base_rate 3.5% → 0.035, cpi 2% → 차감 0.006 → 0.029
+        snap_normal = _snap(kr_base_rate=3.5, cpi_us=2.0)
+        result_normal = _adjust_return_for_market(0.025, AssetType.CASH, snap_normal)
+        assert result_normal < 0.035       # 인플레이션 차감이 적용되어야 함
+        assert result_normal > _MIN_REAL_RETURN
+
+        # 극단 인플레이션: 최솟값으로 고정
+        snap_extreme = _snap(kr_base_rate=3.5, cpi_us=99.0)
+        result_extreme = _adjust_return_for_market(0.025, AssetType.CASH, snap_extreme)
+        assert result_extreme == _MIN_REAL_RETURN
 
 
 # ── get_asset_return ──────────────────────────────────────────────────────────
