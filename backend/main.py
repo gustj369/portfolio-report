@@ -14,6 +14,16 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     settings = get_settings()
     logger.info("포트폴리오 AI 리포트 서버 시작")
+
+    # Sentry 오류 추적 초기화 (SENTRY_DSN 설정 시에만 활성화 — 미설정이면 no-op)
+    if settings.sentry_dsn:
+        try:
+            import sentry_sdk
+            sentry_sdk.init(dsn=settings.sentry_dsn, traces_sample_rate=0.2)
+            logger.info("Sentry 초기화 완료")
+        except ImportError:
+            logger.warning("sentry-sdk 미설치 — 오류 추적 비활성화 (pip install sentry-sdk)")
+
     logger.info(f"Gemini API: {'설정됨' if settings.gemini_api_key else '미설정 (더미 모드)'}")
     logger.info(f"Toss Payments: {'설정됨' if settings.toss_client_key else '미설정 (개발 모드)'}")
     if settings.use_local_storage:
