@@ -9,44 +9,31 @@ AI 기반 맞춤형 자산 배분 진단 + 5년 시뮬레이션 + PDF 리포트 
 이 프로젝트는 수익률을 예측하거나 투자 결정을 대신하기 위한 도구가 아니라,<br>
 개인 자산 현황을 정리하고 AI를 활용해 점검 관점을 얻기 위해 만들었습니다. 
 
-## 빠른 시작
+## 사용 목적
 
-### 1. 백엔드 설정
+- 자산 구성 비중을 한눈에 확인하기
+- 투자 상품별 분산 상태 점검하기
+- 현금, 주식, ETF 등 자산 흐름 정리하기
+- AI를 활용해 포트폴리오에 대한 참고 리포트 생성하기
+- 장기 투자 관점에서 자산 상태를 기록하기
 
-```bash
-cd backend
-pip install -r requirements.txt          # 프로덕션 의존성
-pip install -r requirements-dev.txt      # 개발·테스트 의존성 (pytest 등)
+## 주요 기능
 
-# 환경 변수 설정
-cp .env.example .env
-# .env 파일에 API 키 입력
+- 자산 항목 입력 및 관리
+- 자산군별 비중 시각화
+- 포트폴리오 구성 요약
+- AI 기반 분석 리포트 생성
+- 장기 투자 관점의 참고 코멘트 제공
 
-# 폰트 설치 (한글 PDF 렌더링용)
-python download_fonts.py
-# 안내에 따라 NotoSansKR 폰트를 assets/fonts/ 에 저장
+## AI 분석 기준
 
-# 서버 실행
-uvicorn main:app --reload
-```
+AI 분석은 입력된 자산 정보를 바탕으로<br>
+자산군 비중, 분산 상태, 리스크 노출, 장기 투자<br>
+관점의 참고 의견을 정리하는 방식으로 구성했습니다.<br>
 
-백엔드: http://localhost:8000
-API 문서: http://localhost:8000/docs
-
-### 2. 프론트엔드 설정
-
-```bash
-cd frontend
-npm install
-
-# 환경 변수 설정
-cp .env.local.example .env.local
-
-# 개발 서버 실행
-npm run dev
-```
-
-프론트엔드: http://localhost:3000
+분석 결과는 투자 권유가 아니라<br>
+개인 자산 점검을 돕기 위한 참고 정보로<br>
+활용하는 것을 목표로 합니다.
 
 ## 환경 변수
 
@@ -56,32 +43,12 @@ npm run dev
 |------|------|------|
 | `GEMINI_API_KEY` | Google Gemini API 키 ([무료 발급](https://aistudio.google.com/app/apikey)) | 권장 (없으면 fallback 분석기 사용) |
 | `FRED_API_KEY` | FRED API 키 (금리/CPI 데이터) | 선택 |
-| `TOSS_CLIENT_KEY` | 토스페이먼츠 클라이언트 키 | 결제 필요 시 |
-| `TOSS_SECRET_KEY` | 토스페이먼츠 시크릿 키 | 결제 필요 시 |
-| `REDIS_URL` | Redis URL (결제/리포트 상태 저장) | 배포 권장 |
-| `R2_ACCOUNT_ID` | Cloudflare R2 Account ID | R2 사용 시 |
-| `R2_ACCESS_KEY` | Cloudflare R2 Access Key | R2 사용 시 |
-| `R2_SECRET_KEY` | Cloudflare R2 Secret Key | R2 사용 시 |
-| `R2_BUCKET` | Cloudflare R2 버킷명 | 기본 `portfolio-reports` |
-| `AWS_ACCESS_KEY_ID` | AWS 액세스 키 | S3 사용 시 |
-| `AWS_SECRET_ACCESS_KEY` | AWS 시크릿 키 | S3 사용 시 |
-| `AWS_REGION` | AWS 리전 | 기본 `ap-northeast-2` |
-| `S3_BUCKET` | S3 버킷명 | S3 사용 시 |
-| `USE_LOCAL_STORAGE` | `true` = 로컬 저장 (개발) | 기본 true |
-| `FRONTEND_URL` | 프론트엔드 URL (CORS 허용) | 배포 시 필수 |
-| `REPORT_PRICE_KRW` | 리포트 가격 (원) | 기본 0 |
-| `SMTP_HOST` | SMTP 서버 호스트 | 이메일 발송 시 |
-| `SMTP_PORT` | SMTP 포트 | 기본 587 |
-| `SMTP_USER` | SMTP 사용자 | 이메일 발송 시 |
-| `SMTP_PASSWORD` | SMTP 비밀번호 | 이메일 발송 시 |
-| `SMTP_FROM` | 발신자 주소 | 선택 |
 
 ### 프론트엔드 (`frontend/.env.local`)
 
 | 변수 | 설명 |
 |------|------|
 | `NEXT_PUBLIC_API_URL` | 백엔드 API URL (기본: http://localhost:8000) |
-| `NEXT_PUBLIC_TOSS_CLIENT_KEY` | 토스페이먼츠 클라이언트 키 |
 
 ---
 
