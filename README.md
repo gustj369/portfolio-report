@@ -41,22 +41,6 @@ npm run dev
 
 프론트엔드: http://localhost:3000
 
-### 3. 테스트 실행
-
-```bash
-cd backend
-
-# 단위 테스트 (네트워크·API 없이 실행)
-pytest -v
-
-# 파이프라인 전체 확인 (PDF 생성 — test_report.pdf 파일이 생성됩니다)
-python test_pipeline.py
-```
-
-`python` 명령을 찾을 수 없는 환경에서는 로컬 문제 해결 섹션을 참고하세요.
-
----
-
 ## 환경 변수
 
 ### 백엔드 (`backend/.env`)
@@ -94,16 +78,6 @@ python test_pipeline.py
 
 ---
 
-## 개발 모드 특이사항
-
-- **AI 키 없이도 동작**: Gemini API 키가 없으면 fallback 분석기를 사용합니다.
-- **결제 없이 테스트**: 토스 시크릿 키가 없으면 개발 모드로 결제 승인 단계가 통과됩니다.
-- **상태 저장 fallback**: `REDIS_URL`이 없으면 결제/리포트 상태를 인메모리에 저장하므로 서버 재시작 시 초기화됩니다.
-- **로컬 파일 저장**: R2/S3 설정이 없거나 `USE_LOCAL_STORAGE=true`이면 `backend/generated_reports/`에 PDF를 저장합니다.
-- **PDF 한글**: `backend/assets/fonts/`에 NotoSansKR 폰트가 없으면 영문 폰트로 대체될 수 있습니다.
-- **다운로드 경로**: 리포트 상태 응답의 `download_url`은 저장 방식에 따라 `/report/download/{token}` 또는 `/report/file/{filename}` 형태가 될 수 있습니다.
-
----
 
 ## 기술 스택
 
@@ -140,16 +114,6 @@ npx vercel --prod
 ```
 
 환경 변수: 위 표의 백엔드 변수 모두 설정
-
----
-
-## 로컬 문제 해결
-
-Python 실행 경로, Git 전역 ignore 권한 경고, Toss 결제 모듈 로드 실패는 아래를 참고하세요.
-
-결제 승인 후 저장 실패나 리포트 생성 재요청 같은 운영 복구 절차는 `recover_payment_order.py`를 다루는 [RECOVERY.md](./RECOVERY.md)를 참고하세요.
-
-결제 승인 후 저장 실패나 리포트 생성 재요청 같은 운영 복구 절차는 `recover_payment_order.py`를 다루는 [RECOVERY.md](./RECOVERY.md)를 참고하세요.
 
 ---
 
