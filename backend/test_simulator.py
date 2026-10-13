@@ -110,6 +110,24 @@ class TestRunSimulation:
             result = run_simulation(portfolio, snap)
         assert result.bull.cagr == round(0.14 * 100, 2)
 
+    def test_bull_never_below_base_when_base_exceeds_cap(self):
+        """기본 수익률이 상한(25%)을 넘어도 낙관이 기본보다 낮아지지 않아야 한다 (비트코인 100% 사례)"""
+        portfolio = _portfolio(("BTC", AssetType.BITCOIN, 100.0))
+        snap = make_market()
+        with patch("services.simulator.get_weighted_return_and_vol", return_value=(0.30, 0.80)):
+            result = run_simulation(portfolio, snap)
+        assert result.bear.final_value < result.base.final_value <= result.bull.final_value
+        assert result.bull.cagr == 30.0
+
+    def test_scenario_order_kept_for_negative_expected_return(self):
+        """기본 수익률이 음수여도 비관 < 기본 < 낙관 순서여야 한다"""
+        portfolio = _portfolio(("X", AssetType.FOREIGN_STOCK, 100.0))
+        snap = make_market()
+        with patch("services.simulator.get_weighted_return_and_vol", return_value=(-0.10, 0.20)):
+            result = run_simulation(portfolio, snap)
+        assert result.bear.final_value < result.base.final_value < result.bull.final_value
+        assert (result.bear.cagr, result.base.cagr, result.bull.cagr) == (-14.0, -10.0, -6.0)
+
     def test_cagr_equals_annual_return_directly(self):
         """CAGR은 DCA 수식이 아닌 적용된 연수익률(annual_return) 그 자체여야 한다"""
         portfolio = _portfolio(("S&P500", AssetType.FOREIGN_STOCK, 100.0))

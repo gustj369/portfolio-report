@@ -9,12 +9,15 @@ from services.market_data import get_weighted_return_and_vol, MarketSnapshot
 
 logger = logging.getLogger(__name__)
 
-# 승수: bear=0.6(기본 수익률의 60%), base=1.0(그대로), bull=1.4(140%)
+# 시나리오 폭: 기본 수익률 ± |기본 수익률| × 0.4
+#   기본 수익률이 양수면 기존 승수(bear=0.6, bull=1.4)와 동일한 값이고,
+#   음수여도 비관 < 기본 < 낙관 순서가 유지된다 (단순 승수는 음수에서 순서가 뒤집힘)
 SCENARIOS = {
-    "bear": ("비관", 0.6),
-    "base": ("기본", 1.0),
-    "bull": ("낙관", 1.4),
+    "bear": ("비관", -1),
+    "base": ("기본", 0),
+    "bull": ("낙관", 1),
 }
+_SCENARIO_SPREAD = 0.4
 
 INVESTMENT_YEARS = 5
 MONTHS = INVESTMENT_YEARS * 12
@@ -52,15 +55,14 @@ def run_simulation(
     monthly_contribution = float(portfolio.monthly_saving)
 
     results = {}
-    for scenario_key, (scenario_name, multiplier) in SCENARIOS.items():
-        annual_return = base_return * multiplier
+    for scenario_key, (scenario_name, direction) in SCENARIOS.items():
+        uncapped = base_return + direction * abs(base_return) * _SCENARIO_SPREAD
+        annual_return = uncapped
         if scenario_key == "bull":
-            capped = annual_return > _BULL_RETURN_CAP
-            annual_return = min(annual_return, _BULL_RETURN_CAP)
-            if capped:
-                logger.debug(
-                    f"낙관 시나리오 수익률 상한 적용: {base_return * multiplier:.4f} → {annual_return:.4f}"
-                )
+            # 상한은 적용하되 기본 시나리오보다 낮아지지는 않게 (기본 수익률이 상한을 넘는 경우)
+            annual_return = min(uncapped, max(_BULL_RETURN_CAP, base_return))
+            if annual_return < uncapped:
+                logger.debug(f"낙관 시나리오 수익률 상한 적용: {uncapped:.4f} → {annual_return:.4f}")
         scenario_result = _simulate_scenario(
             name=scenario_name,
             initial_value=initial_value,
