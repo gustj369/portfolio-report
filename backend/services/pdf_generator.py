@@ -413,7 +413,7 @@ def _build_portfolio_page(
 
     # AI 진단
     story.append(Paragraph("AI 종합 진단", styles["subsection_title"]))
-    story.append(Paragraph(ai_content.portfolio_diagnosis, ParagraphStyle(
+    story.append(Paragraph(_xe(ai_content.portfolio_diagnosis), ParagraphStyle(
         "DiagBody", fontName=FONT_REGULAR, fontSize=9,
         textColor=COLOR_DARK_GRAY, spaceAfter=3, leading=14,
     )))
@@ -712,13 +712,13 @@ def _build_market_page(
 
     # AI 시장 코멘트
     story.append(Paragraph("현재 시장이 내 포트폴리오에 미치는 영향", styles["subsection_title"]))
-    story.append(Paragraph(ai_content.market_commentary, styles["body"]))
+    story.append(Paragraph(_xe(ai_content.market_commentary), styles["body"]))
     story.append(Spacer(1, 10))
 
     # 맞춤 주의사항
     story.append(Paragraph("맞춤 주의사항", styles["subsection_title"]))
     for i, caution in enumerate(ai_content.cautions, 1):
-        story.append(Paragraph(f"{i}. {caution}", styles["bullet"]))
+        story.append(Paragraph(f"{i}. {_xe(caution)}", styles["bullet"]))
     story.append(Spacer(1, 15))
 
     # 면책 고지

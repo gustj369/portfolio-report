@@ -110,3 +110,40 @@ class TestBuildReportSmoke:
         assert isinstance(result, bytes)
         assert len(result) > 0
         assert result[:4] == b"%PDF"
+
+
+def test_ai_text_special_chars_preserved():
+    """AI 문장의 '&'·'<'가 ReportLab 마크업으로 해석되어 'S&P500;'처럼 깨지지 않아야 한다"""
+    from unittest.mock import patch
+    from conftest import make_market
+    from services import pdf_generator
+    from services.fallback_analyzer import generate_personalized_content
+    from services.simulator import run_simulation, calculate_risk_score
+    from test_pipeline import _sample_data
+
+    captured = []
+    real_paragraph = pdf_generator.Paragraph
+
+    def spy(text, *args, **kwargs):
+        p = real_paragraph(text, *args, **kwargs)
+        captured.append(p.getPlainText())
+        return p
+
+    user_profile, portfolio = _sample_data()
+    snap = make_market()
+    simulation = run_simulation(portfolio, snap)
+    score, grade = calculate_risk_score(portfolio, snap)
+    base_ai = generate_personalized_content(user_profile, portfolio, simulation, snap, score, grade)
+    ai = base_ai.model_copy(update={
+        "portfolio_diagnosis": "S&P500 비중 50% 진단",
+        "market_commentary": "S&P500 지수 7,800 수준",
+        "cautions": ["변동성 <20% 유지 권장"],
+    })
+    with patch.object(pdf_generator, "Paragraph", side_effect=spy):
+        pdf_generator.build_report(
+            user_profile=user_profile, portfolio=portfolio, simulation=simulation,
+            ai_content=ai, market_snapshot=snap, charts={},
+        )
+    assert "S&P500 비중 50% 진단" in captured
+    assert "S&P500 지수 7,800 수준" in captured
+    assert any(t.endswith("변동성 <20% 유지 권장") for t in captured)
