@@ -171,3 +171,72 @@ class TestDictionaryCoverage:
         """BASE_VOLATILITY가 모든 AssetType을 커버해야 한다 — 누락 시 _DEFAULT_VOLATILITY로 조용히 fallback됨"""
         missing = set(AssetType) - set(BASE_VOLATILITY.keys())
         assert not missing, f"BASE_VOLATILITY에서 누락된 AssetType: {missing}"
+
+
+# ── fetch_market_snapshot_cached ──────────────────────────────────────────────
+
+class TestFetchMarketSnapshotCached:
+    def test_cache_read_failure_falls_back_to_fresh_fetch(self):
+        """캐시 조회가 실패해도(예: REDIS_URL 설정 + 연결 불가) 예외 없이 새로 수집해야 한다"""
+        from services.market_data import fetch_market_snapshot_cached
+        fresh = _snap()
+        with patch("services.storage.storage_get",
+                   side_effect=RuntimeError("Redis is configured but storage get failed")), \
+             patch("services.storage.storage_set",
+                   side_effect=RuntimeError("Redis is configured but storage set failed")), \
+             patch("services.market_data.fetch_market_snapshot", return_value=fresh) as fetch:
+            result = fetch_market_snapshot_cached("")
+        assert result == fresh
+        fetch.assert_called_once()
+
+
+# ── fetch_market_snapshot — KOSPI 수집/fallback ───────────────────────────────
+
+_LIVE_PRICES = {"^GSPC": 7805.45, "^KS11": 6035.35, "GC=F": 4184.2, "KRW=X": 1340.13}
+
+
+def _naver_only_get(url, *args, **kwargs):
+    """Naver 엔드포인트만 응답하고 나머지 외부 요청은 실패시키는 requests.get 대역"""
+    if "m.stock.naver.com" not in url:
+        raise ConnectionError("offline")
+    resp = MagicMock(ok=True)
+    resp.json.return_value = [  # 현재 응답 형식: 일자별 리스트, 최신순
+        {"localTradedAt": "2026-10-13", "closePrice": "6,035.35"},
+        {"localTradedAt": "2026-10-12", "closePrice": "6,384.24"},
+    ]
+    return resp
+
+
+class TestFetchMarketSnapshotKospi:
+    def test_kospi_above_previous_cap_is_accepted(self):
+        """KOSPI 6,000대가 기존 상한(5,000)에 걸려 기본값 2,500으로 떨어지지 않아야 한다"""
+        from services.market_data import fetch_market_snapshot
+        with patch("services.market_data._fetch_yf_ticker", side_effect=_LIVE_PRICES.get), \
+             patch("services.market_data.requests.get", side_effect=ConnectionError("offline")):
+            snap = fetch_market_snapshot("")
+        assert snap.kospi == 6035.35
+        assert snap.sp500 == 7805.45
+
+    def test_kospi_falls_back_to_naver_list_response(self):
+        """Yahoo 경로가 모두 실패하면 Naver의 리스트 형식 응답에서 최신 종가를 읽어야 한다"""
+        from services.market_data import fetch_market_snapshot
+        prices = {**_LIVE_PRICES, "^KS11": None}
+        with patch("services.market_data._fetch_yf_ticker", side_effect=prices.get), \
+             patch("services.market_data.yf.Ticker", side_effect=RuntimeError("yahoo down")), \
+             patch("services.market_data.yf.download", side_effect=RuntimeError("yahoo down")), \
+             patch("services.market_data.requests.get", side_effect=_naver_only_get):
+            snap = fetch_market_snapshot("")
+        assert snap.kospi == 6035.35
+
+    def test_kospi_yf_download_multiindex_frame(self):
+        """yf.download가 MultiIndex 컬럼 DataFrame을 반환해도 마지막 종가를 읽어야 한다"""
+        import pandas as pd
+        from services.market_data import fetch_market_snapshot
+        frame = pd.DataFrame({("Close", "^KS11"): [5990.0, 6035.35]})
+        prices = {**_LIVE_PRICES, "^KS11": None}
+        with patch("services.market_data._fetch_yf_ticker", side_effect=prices.get), \
+             patch("services.market_data.yf.Ticker", side_effect=RuntimeError("yahoo down")), \
+             patch("services.market_data.yf.download", return_value=frame), \
+             patch("services.market_data.requests.get", side_effect=ConnectionError("offline")):
+            snap = fetch_market_snapshot("")
+        assert snap.kospi == 6035.35

@@ -60,6 +60,14 @@ FRED_SERIES = {
 # 한국 기준금리 (FRED에 없을 경우 기본값)
 KR_BASE_RATE_DEFAULT = 3.5
 
+# 수신값 sanity 범위 — 단위 오류·깨진 응답만 걸러내도록 넉넉하게 잡는다.
+# 실제 시세가 상한을 넘으면 모든 소스가 거부되어 기본값으로 떨어지므로
+# (2026-10 KOSPI 6,000대에서 상한 5,000으로 발생) 현재가 대비 충분한 여유를 둘 것.
+_KOSPI_MIN, _KOSPI_MAX = 1000, 20000
+_SP500_MIN, _SP500_MAX = 1000, 30000
+_USDKRW_MIN, _USDKRW_MAX = 800, 2500
+_GOLD_MIN, _GOLD_MAX = 500, 20000
+
 # 수익률 조정 계수 (_adjust_return_for_market 사용)
 _HIGH_RATE_THRESHOLD = 4.5      # US 10Y 수익률이 이 값 초과 시 고금리 환경으로 판단
 _HIGH_RATE_BOND_BOOST = 0.01    # 고금리 환경에서 채권/현금 수익률 가산
@@ -71,65 +79,6 @@ _HIST_BLEND_RATIO = 0.5         # 역사적 수익률 블렌딩 비율 (0=기본
 # BASE_RETURNS / BASE_VOLATILITY에 없는 미등록 자산유형의 fallback 기본값
 _DEFAULT_RETURN = 0.05
 _DEFAULT_VOLATILITY = 0.15
-
-
-def _parse_stooq_close(
-    csv_text: str,
-    *,
-    label: str,
-    min_value: float,
-    max_value: float,
-    max_days_old: int = 5,
-    invert_if_fraction: bool = False,
-    today=None,
-) -> float | None:
-    """stooq CSV 응답에서 최신 Close 값을 안전하게 추출한다."""
-    if not csv_text:
-        return None
-
-    lines = csv_text.strip().split("\n")
-    if len(lines) < 2:
-        return None
-
-    cols = [c.strip() for c in lines[0].split(",")]
-    vals = [v.strip() for v in lines[1].split(",")]
-    close_idx = cols.index("Close") if "Close" in cols else 6
-    date_idx = cols.index("Date") if "Date" in cols else 1
-
-    if "Close" not in cols or "Date" not in cols:
-        logger.warning(f"{label} stooq 예상치 못한 헤더 (fallback 인덱스 사용): {cols[:8]}")
-
-    if len(vals) <= max(close_idx, date_idx):
-        logger.warning(f"{label} stooq 열 수 부족 — 건너뜀")
-        return None
-
-    if vals[close_idx] in ("N/A", "-", "", "null"):
-        logger.warning(f"{label} stooq N/A 수신 — 건너뜀")
-        return None
-
-    raw_date = vals[date_idx]
-    if raw_date in ("N/A", "-", "", "null"):
-        logger.warning(f"{label} stooq 날짜 N/A — 건너뜀")
-        return None
-
-    value = float(vals[close_idx])
-    if invert_if_fraction and 0 < value < 1:
-        value = round(1 / value, 2)
-        logger.info(f"{label} stooq 역단위 감지 → 역수 보정: {value}")
-
-    stooq_date = datetime.strptime(raw_date, "%Y-%m-%d").date()
-    today = today or datetime.now(KST).date()
-    days_old = (today - stooq_date).days
-    if days_old > max_days_old:
-        logger.warning(f"{label} stooq 데이터 오래됨 ({days_old}일, {raw_date}) — 건너뜀")
-        return None
-
-    if min_value <= value <= max_value:
-        logger.info(f"{label} stooq fallback 성공: {value} ({raw_date})")
-        return value
-
-    logger.warning(f"{label} stooq 범위 밖 수신: {value} (예상 {min_value:g}~{max_value:g}) — 건너뜀")
-    return None
 
 
 # 시장 데이터 수집 실패 시 사용하는 fallback 기본값 (conftest.py 등 테스트에서도 사용)
@@ -175,25 +124,26 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                 continue
             if key == "sp500":
                 # S&P 500: 합리적 범위 체크 (1000~10000)
-                if 1000 <= price <= 10000:
+                if _SP500_MIN <= price <= _SP500_MAX:
                     data["sp500"] = price
             elif key == "kospi":
                 # KOSPI: 합리적 범위 체크 (1000~5000)
-                if 1000 <= price <= 5000:
+                if _KOSPI_MIN <= price <= _KOSPI_MAX:
                     data["kospi"] = price
                 else:
                     # 범위 밖: fast_info fallback (추가 KOSPI fallback 체인은 하단에서 처리)
                     try:
                         fp = float(yf.Ticker("^KS11").fast_info.last_price or 0)
-                        if 1000 <= fp <= 5000:
+                        if _KOSPI_MIN <= fp <= _KOSPI_MAX:
                             data["kospi"] = fp
                     except Exception:
                         pass
             elif key == "gold":
-                data["gold_price"] = price
+                if _GOLD_MIN <= price <= _GOLD_MAX:
+                    data["gold_price"] = price
             elif key == "usd_krw":
                 # 환율: 합리적 범위 체크 (800~2000)
-                if 800 <= price <= 2000:
+                if _USDKRW_MIN <= price <= _USDKRW_MAX:
                     data["usd_krw"] = price
 
     # KOSPI 다중 fallback (history가 비어있거나 환경 문제로 실패 시)
@@ -202,7 +152,7 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
         try:
             t = yf.Ticker("^KS11")
             fp = float(t.fast_info.last_price or 0)
-            if 1000 <= fp <= 5000:
+            if _KOSPI_MIN <= fp <= _KOSPI_MAX:
                 data["kospi"] = fp
         except Exception as e:
             logger.warning(f"KOSPI fast_info fallback 실패: {e}")
@@ -214,8 +164,9 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
             if not dl.empty:
                 close = dl["Close"].dropna()
                 if not close.empty:
-                    fp = float(close.iloc[-1])
-                    if 1000 <= fp <= 5000:
+                    # 최신 yfinance는 단일 티커도 MultiIndex 컬럼(DataFrame)을 반환 — 마지막 값만 꺼냄
+                    fp = float(close.to_numpy().ravel()[-1])
+                    if _KOSPI_MIN <= fp <= _KOSPI_MAX:
                         data["kospi"] = fp
         except Exception as e:
             logger.warning(f"KOSPI yf.download fallback 실패: {e}")
@@ -225,7 +176,7 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
         try:
             info = yf.Ticker("^KS11").info
             fp = float(info.get("regularMarketPrice") or info.get("currentPrice") or 0)
-            if 1000 <= fp <= 5000:
+            if _KOSPI_MIN <= fp <= _KOSPI_MAX:
                 data["kospi"] = fp
         except Exception as e:
             logger.warning(f"KOSPI info fallback 실패: {e}")
@@ -244,6 +195,9 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
             )
             if resp.ok:
                 price_data = resp.json()
+                # 응답이 일자별 리스트(최신순)로 바뀐 경우 첫 항목 사용 — 이전 dict 형식도 지원
+                if isinstance(price_data, list):
+                    price_data = price_data[0] if price_data else {}
                 # closePrice는 "2,547.42" 형식 (콤마 제거 필요)
                 raw = (
                     price_data.get("closePrice")
@@ -252,7 +206,7 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
                     or "0"
                 )
                 fp = float(str(raw).replace(",", ""))
-                if 1000 <= fp <= 5000:
+                if _KOSPI_MIN <= fp <= _KOSPI_MAX:
                     data["kospi"] = fp
                     logger.info(f"KOSPI Naver Finance fallback 성공: {fp}")
                 elif fp == 0:
@@ -261,52 +215,13 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
         except Exception as e:
             logger.warning(f"KOSPI Naver Finance fallback 실패: {e}")
 
-    if data["kospi"] == 2500.0:
-        # fallback 5: stooq.com CSV (Yahoo Finance·Naver와 완전히 독립적인 유럽 데이터 소스)
-        try:
-            resp = requests.get(
-                "https://stooq.com/q/l/?s=%5eks11&f=sd2t2ohlcv&h&e=csv",
-                headers={"User-Agent": "Mozilla/5.0"},
-                timeout=10,
-            )
-            if resp.ok and resp.text:
-                fp = _parse_stooq_close(
-                    resp.text,
-                    label="KOSPI",
-                    min_value=1000,
-                    max_value=5000,
-                )
-                if fp is not None:
-                    data["kospi"] = fp
-        except Exception as e:
-            logger.warning(f"KOSPI stooq fallback 실패: {e}")
-
     # KOSPI 최종 상태 로그 (Render 로그에서 확인용)
     if data["kospi"] == 2500.0:
         logger.warning("KOSPI 전체 fallback 실패 — 기본값 2500 사용 중")
     else:
         logger.info(f"KOSPI 최종값: {data['kospi']:.2f}")
 
-    # ── SP500 fallback + 최종 로그 ────────────────────────────
-    if data["sp500"] == 5000.0:
-        try:
-            resp = requests.get(
-                "https://stooq.com/q/l/?s=%5Espx&f=sd2t2ohlcv&h&e=csv",
-                headers={"User-Agent": "Mozilla/5.0"},
-                timeout=10,
-            )
-            if resp.ok and resp.text:
-                fp = _parse_stooq_close(
-                    resp.text,
-                    label="SP500",
-                    min_value=1000,
-                    max_value=10000,
-                )
-                if fp is not None:
-                    data["sp500"] = fp
-        except Exception as e:
-            logger.warning(f"SP500 stooq fallback 실패: {e}")
-
+    # ── SP500 최종 로그 (Yahoo 외 독립 fallback 없음) ─────────
     if data["sp500"] == 5000.0:
         logger.warning("SP500 전체 fallback 실패 — 기본값 5000 사용 중")
     else:
@@ -314,28 +229,7 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
 
     # ── USD/KRW fallback ──────────────────────────────────────
     if data["usd_krw"] == 1350.0:
-        # fallback 1: stooq.com CSV — 장 마감 기준 최신 데이터 (open.er-api 24h 캐시보다 신선)
-        try:
-            resp = requests.get(
-                "https://stooq.com/q/l/?s=usdkrw&f=sd2t2ohlcv&h&e=csv",
-                headers={"User-Agent": "Mozilla/5.0"},
-                timeout=10,
-            )
-            if resp.ok and resp.text:
-                krw = _parse_stooq_close(
-                    resp.text,
-                    label="USD/KRW",
-                    min_value=800,
-                    max_value=2000,
-                    invert_if_fraction=True,
-                )
-                if krw is not None:
-                    data["usd_krw"] = krw
-        except Exception as e:
-            logger.warning(f"USD/KRW stooq fallback 실패: {e}")
-
-    if data["usd_krw"] == 1350.0:
-        # fallback 2: open.er-api.com — 무료, 인증 불필요 (무료 플랜 24h 캐시)
+        # fallback: open.er-api.com — 무료, 인증 불필요 (무료 플랜 24h 캐시)
         try:
             resp = requests.get(
                 "https://open.er-api.com/v6/latest/USD",
@@ -344,7 +238,7 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
             )
             if resp.ok:
                 krw = float(resp.json().get("rates", {}).get("KRW", 0))
-                if 800 <= krw <= 2000:
+                if _USDKRW_MIN <= krw <= _USDKRW_MAX:
                     data["usd_krw"] = krw
                     logger.info(f"USD/KRW open.er-api fallback 성공: {krw}")
         except Exception as e:
@@ -356,27 +250,7 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
     else:
         logger.info(f"USD/KRW 최종값: {data['usd_krw']:.2f}")
 
-    # ── 금값 fallback ─────────────────────────────────────────
-    if data["gold_price"] == 2300.0:
-        # stooq.com XAU/USD (트로이 온스 기준 달러 가격)
-        try:
-            resp = requests.get(
-                "https://stooq.com/q/l/?s=xauusd&f=sd2t2ohlcv&h&e=csv",
-                headers={"User-Agent": "Mozilla/5.0"},
-                timeout=10,
-            )
-            if resp.ok and resp.text:
-                fp = _parse_stooq_close(
-                    resp.text,
-                    label="금",
-                    min_value=500,
-                    max_value=5000,
-                )
-                if fp is not None:
-                    data["gold_price"] = fp
-        except Exception as e:
-            logger.warning(f"금 stooq fallback 실패: {e}")
-
+    # ── 금값 최종 로그 (Yahoo 외 독립 fallback 없음) ──────────
     if data["gold_price"] == 2300.0:
         logger.warning("금값 전체 fallback 실패 — 기본값 2300 사용 중")
     else:
@@ -406,7 +280,7 @@ def fetch_market_snapshot(fred_api_key: str = "") -> MarketSnapshot:
         logger.error(
             f"시장 데이터 다수 기본값 사용 중 ({', '.join(_fallback_used)}) — "
             f"시뮬레이션·리밸런싱 결과가 실제와 크게 다를 수 있습니다. "
-            f"네트워크 상태 및 외부 API(Yahoo Finance, stooq) 접근 가능 여부를 확인하세요."
+            f"네트워크 상태 및 외부 API(Yahoo Finance, Naver, open.er-api) 접근 가능 여부를 확인하세요."
         )
     elif _fallback_used:
         logger.warning(
@@ -541,7 +415,12 @@ def fetch_market_snapshot_cached(fred_api_key: str = "") -> MarketSnapshot:
     """
     from services.storage import storage_get, storage_set
 
-    cached = storage_get(_MARKET_CACHE_KEY)
+    # 캐시는 최적화일 뿐 — Redis 장애로 조회가 실패해도 /analyze 전체를 실패시키지 않고 재수집
+    try:
+        cached = storage_get(_MARKET_CACHE_KEY)
+    except Exception as e:
+        logger.warning(f"시장 데이터 캐시 조회 실패 — 캐시 없이 수집: {e}")
+        cached = None
     if cached is not None:
         try:
             snapshot = MarketSnapshot.model_validate(cached)
