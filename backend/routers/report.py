@@ -9,7 +9,7 @@ import time
 from datetime import datetime, timezone, timedelta
 
 KST = timezone(timedelta(hours=9))
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Request
 from pydantic import BaseModel
 
 from config import get_settings, Settings
@@ -28,12 +28,17 @@ from services.chart_generator import (
 from services.pdf_generator import build_report
 from services.payment_store import get_confirmed_payment
 from services.file_storage import save_pdf, load_pdf_bytes, LOCAL_REPORTS_DIR
+from limiter import limiter, REPORT_ISSUE_LIMIT
 
 router = APIRouter(prefix="/report", tags=["report"])
 logger = logging.getLogger(__name__)
 
 # 스토리지 키 접두사
 _RECORD_PFX = "report:record:"
+
+# 이 시간(초)을 넘긴 PENDING/GENERATING 레코드는 유실된 작업으로 보고 재생성 허용
+# PENDING은 수초 내 GENERATING으로 전환되는 게 정상, GENERATING은 AI 재시도 포함 최대 수 분
+_STALE_AFTER_SECONDS = {ReportStatus.PENDING: 300, ReportStatus.GENERATING: 900}
 
 
 def _save_record(record: ReportRecord) -> None:
@@ -78,7 +83,9 @@ class ReportStatusResponse(BaseModel):
 
 
 @router.post("/generate", response_model=GenerateReportResponse)
+@limiter.limit(REPORT_ISSUE_LIMIT)
 async def generate_report(
+    request: Request,
     body: GenerateReportRequest,
     background_tasks: BackgroundTasks,
     settings: Settings = Depends(get_settings),
@@ -102,9 +109,9 @@ async def generate_report(
             detail="결제 정보를 찾을 수 없습니다. 결제 후 7일이 경과했거나 유효하지 않은 요청입니다.",
         )
 
-    # 이미 생성 중/완료인 경우 — GENERATING/READY만 차단, ERROR/PENDING은 재시도 허용
+    # 이미 완료된 경우 차단, ERROR는 재시도 허용
     existing = _load_record(body.report_token)
-    if existing and existing.status in (ReportStatus.GENERATING, ReportStatus.READY):
+    if existing and existing.status == ReportStatus.READY:
         logger.info(
             f"[{body.report_token}] {existing.status.value} 상태 — 중복 생성 건너뜀 "
             f"({time.perf_counter() - t0:.2f}s)"
@@ -120,31 +127,31 @@ async def generate_report(
             f"({time.perf_counter() - t0:.2f}s)"
         )
 
-    # PENDING 중복 생성 방지: 5분 이내 PENDING 재요청은 건너뜀
-    # 배경 태스크 첫 줄에서 즉시 GENERATING으로 전환하므로 PENDING 체류는 수초 이내가 정상.
-    # 5분을 초과한 PENDING은 서버 재시작 등으로 태스크가 유실된 경우 → 재생성 허용.
-    if existing and existing.status == ReportStatus.PENDING:
+    # PENDING/GENERATING 중복 생성 방지: 제한 시간 이내 재요청은 건너뜀.
+    # 제한 시간을 넘긴 레코드는 서버 재시작·슬립으로 백그라운드 태스크가 유실된 경우로 보고 재생성 허용
+    # (GENERATING에 이 처리가 없으면 유실 후 재요청이 영원히 "처리 중"으로 막힘)
+    stale_after = _STALE_AFTER_SECONDS.get(existing.status) if existing else None
+    if stale_after is not None:
         try:
             now = datetime.now(KST)
             created = existing.created_at
             if created.tzinfo is None:          # naive datetime 안전 처리
                 created = created.replace(tzinfo=KST)
             elapsed = int((now - created).total_seconds())
-            if elapsed < 300:
+            if elapsed < stale_after:
                 # 정상 흐름(새로고침·재시도로 인한 중복) — info 레벨로 기록
                 logger.info(
-                    f"[{body.report_token}] PENDING 중복 요청 "
+                    f"[{body.report_token}] {existing.status.value} 중복 요청 "
                     f"({elapsed}초 경과) — 건너뜀 ({time.perf_counter() - t0:.2f}s)"
                 )
                 return GenerateReportResponse(
                     report_token=body.report_token,
-                    status=ReportStatus.PENDING.value,
+                    status=existing.status.value,
                     message="이미 처리 중이거나 완료된 요청입니다.",
                 )
             else:
-                # 5분 초과 PENDING → 태스크 유실 가능성 — 재생성 허용
                 logger.warning(
-                    f"[{body.report_token}] PENDING {elapsed}초 초과 — 태스크 유실 의심, 재생성 허용 "
+                    f"[{body.report_token}] {existing.status.value} {elapsed}초 초과 — 태스크 유실 의심, 재생성 허용 "
                     f"({time.perf_counter() - t0:.2f}s)"
                 )
         except Exception:
@@ -288,8 +295,8 @@ async def _generate_report_background(
         market_snapshot = await loop.run_in_executor(None, fetch_market_snapshot_cached, settings.fred_api_key)
         logger.info(f"[{report_token}] 시장 데이터 수집 완료 ({time.perf_counter()-t0:.2f}s)")
 
-        # 2. 시뮬레이션
-        simulation = run_simulation(analyze_req.portfolio, market_snapshot)
+        # 2. 시뮬레이션 (ticker 입력 시 yfinance 과거 데이터 조회 — executor로 이벤트 루프 블로킹 방지)
+        simulation = await loop.run_in_executor(None, run_simulation, analyze_req.portfolio, market_snapshot)
         logger.info(f"[{report_token}] 시뮬레이션 완료 ({time.perf_counter()-t0:.2f}s)")
 
         # 3. 전체 AI 분석 (Gemini time.sleep 포함 — run_in_executor로 이벤트 루프 블로킹 방지)
@@ -307,7 +314,7 @@ async def _generate_report_background(
                     ai_content = await loop.run_in_executor(
                         None, generate_full_analysis,
                         analyze_req.user_profile, analyze_req.portfolio,
-                        simulation, market_snapshot, settings.gemini_api_key,
+                        simulation, market_snapshot, settings.gemini_api_key, settings.gemini_model,
                     )
                     logger.info(
                         f"[{report_token}] Gemini AI 분석 완료 "
@@ -400,7 +407,9 @@ async def _generate_report_background(
         user_email = analyze_req.user_profile.email
         if user_email and settings.smtp_host and settings.smtp_user and settings.smtp_password:
             try:
-                from services.email_service import send_report_email
+                from services.email_service import send_report_email, reserve_email_quota
+                if not reserve_email_quota(user_email):
+                    raise RuntimeError("동일 주소 일일 발송 한도 초과 또는 한도 확인 불가")
                 from_addr = settings.smtp_from or settings.smtp_user
                 _smtp_host = settings.smtp_host
                 _smtp_port = settings.smtp_port
@@ -444,12 +453,11 @@ async def _generate_report_background(
         # 운영 알림 — ADMIN_ALERT_WEBHOOK_URL 설정 시 Slack 등으로 즉시 전파
         # 알림 실패가 오류 처리 흐름을 방해하지 않도록 별도 try-except로 감쌈
         try:
-            from services.alert_service import send_alert
-            send_alert(
-                settings.admin_alert_webhook_url,
-                f"🚨 [포트폴리오 리포트] PDF 생성 실패\n"
-                f"• token: `{report_token}`\n"
-                f"• 오류: {type(e).__name__}: {e}",
+            from services.alert_service import send_admin_alert
+            send_admin_alert(
+                webhook_url=settings.admin_alert_webhook_url,
+                title="🚨 [포트폴리오 리포트] PDF 생성 실패",
+                message=f"• token: `{report_token}`\n• 오류: {type(e).__name__}: {e}",
             )
         except Exception as alert_err:
             logger.warning(f"[{report_token}] 알림 전송 실패 (무시): {alert_err}")

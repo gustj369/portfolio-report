@@ -41,8 +41,8 @@ async def analyze_portfolio(
         t1 = time.perf_counter()
         logger.info(f"시장 데이터 수집 완료 ({t1 - t0:.2f}s 누적)")
 
-        # 2. 5년 시뮬레이션
-        simulation = run_simulation(body.portfolio, market_snapshot)
+        # 2. 5년 시뮬레이션 (ticker 입력 시 yfinance 과거 데이터 조회 — executor로 이벤트 루프 블로킹 방지)
+        simulation = await _loop.run_in_executor(None, run_simulation, body.portfolio, market_snapshot)
         t2 = time.perf_counter()
         logger.info(f"시뮬레이션 완료 ({t2 - t1:.2f}s 스테이지, {t2 - t0:.2f}s 누적)")
 
@@ -62,7 +62,7 @@ async def analyze_portfolio(
                 summary, ai_risk_score, ai_risk_grade = await _loop.run_in_executor(
                     None, generate_preview_summary,
                     body.user_profile, body.portfolio,
-                    market_snapshot, settings.gemini_api_key,
+                    market_snapshot, settings.gemini_api_key, settings.gemini_model,
                 )
                 elapsed = time.perf_counter()
                 logger.info(f"AI 분석 완료 ({elapsed - t2:.2f}s 스테이지, {elapsed - t0:.2f}s 누적)")

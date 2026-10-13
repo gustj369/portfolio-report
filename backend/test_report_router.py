@@ -105,6 +105,24 @@ def test_generate_already_generating_skips_duplicate():
     assert resp.json()["status"] == "generating"
 
 
+def test_generate_stale_generating_restarts():
+    """15분 넘게 GENERATING인 레코드(서버 재시작으로 태스크 유실)는 재생성을 시작해야 한다"""
+    from datetime import timedelta
+    stale = _record(ReportStatus.GENERATING)
+    stale.created_at = datetime.now(timezone.utc) - timedelta(minutes=20)
+    with (
+        patch("routers.report.get_confirmed_payment", return_value=_payment()),
+        patch("routers.report._load_record", return_value=stale),
+        patch("routers.report._save_record"),
+        patch("routers.report._generate_report_background") as bg,
+    ):
+        with TestClient(app) as c:
+            resp = c.post(GENERATE_URL, json={"report_token": TOKEN})
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "pending"
+    bg.assert_called_once()
+
+
 def test_generate_already_ready_skips_duplicate():
     """이미 READY 상태 → 200 조기 반환, 중복 생성 차단"""
     with (
@@ -274,3 +292,31 @@ def test_serve_file_valid_served(tmp_path):
             resp = c.get(f"{FILE_URL}/{filename}")
     assert resp.status_code == 200
     assert "application/pdf" in resp.headers["content-type"]
+
+
+# ──────────────────────────────────────────────────────────────
+# 백그라운드 생성 실패 → 운영 알림
+# ──────────────────────────────────────────────────────────────
+
+def test_background_failure_marks_error_and_sends_admin_alert():
+    """PDF 생성 실패 시 ERROR 저장 + 운영 알림이 실제로 호출되어야 한다 (존재하지 않는 함수 import로 묻히지 않도록)"""
+    import asyncio
+    from config import get_settings
+    from routers.report import _generate_report_background
+
+    settings = get_settings().model_copy(update={"admin_alert_webhook_url": "https://hooks.example/test"})
+    record = _record()
+    payment = _payment()
+    payment["analyze_request"]["user_profile"]["email"] = ""  # 모델 검증을 통과해 시장 데이터 단계에서 실패하도록
+    saved = []
+    with patch("routers.report._save_record", side_effect=lambda r: saved.append(r.status)), \
+         patch("routers.report._load_record", return_value=None), \
+         patch("routers.report.fetch_market_snapshot_cached", side_effect=RuntimeError("market down")), \
+         patch("services.alert_service.send_admin_alert") as alert:
+        asyncio.run(_generate_report_background(TOKEN, record, payment, settings))
+
+    assert saved[-1] == ReportStatus.ERROR
+    alert.assert_called_once()
+    kwargs = alert.call_args.kwargs
+    assert kwargs["webhook_url"] == "https://hooks.example/test"
+    assert TOKEN in kwargs["message"] and "market down" in kwargs["message"]
