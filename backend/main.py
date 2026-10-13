@@ -20,17 +20,10 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     settings = get_settings()
     logger.info("포트폴리오 AI 리포트 서버 시작")
-
-    # Sentry 오류 추적 초기화 (SENTRY_DSN 설정 시에만 활성화 — 미설정이면 no-op)
-    if settings.sentry_dsn:
-        try:
-            import sentry_sdk
-            sentry_sdk.init(dsn=settings.sentry_dsn, traces_sample_rate=0.2)
-            logger.info("Sentry 초기화 완료")
-        except ImportError:
-            logger.warning("sentry-sdk 미설치 — 오류 추적 비활성화 (pip install sentry-sdk)")
-
-    logger.info(f"Gemini API: {'설정됨' if settings.gemini_api_key else '미설정 (더미 모드)'}")
+    # Sentry는 모듈 로드 시 init_sentry()에서 한 번만 초기화 (lifespan에서 재초기화하지 않음)
+    logger.info(
+        f"Gemini API: {'설정됨 (' + settings.gemini_model + ')' if settings.gemini_api_key else '미설정 (fallback 분석)'}"
+    )
     logger.info(f"Toss Payments: {'설정됨' if settings.toss_client_key else '미설정 (개발 모드)'}")
     if settings.use_local_storage:
         storage_label = "로컬 파일시스템"
@@ -101,9 +94,13 @@ async def health_check():
 
     # Redis 연결 여부 — _get_redis() 재사용 (새 연결 없이 캐시 반환)
     from services.storage import _get_redis
+    # REDIS_URL이 설정됐는데 연결에 실패하면 _get_redis()가 None을 반환하므로 설정 여부로 구분
     try:
         r = _get_redis()
-        redis_status = "connected" if r is not None else "not_configured"
+        if r is not None:
+            redis_status = "connected"
+        else:
+            redis_status = "unreachable" if settings.redis_url else "not_configured"
     except Exception:
         redis_status = "disconnected"
 
