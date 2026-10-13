@@ -8,14 +8,22 @@ on:
 
 jobs:
   backend-test:
-    name: Backend (pytest)
+    name: Backend (pytest, Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.12: 로컬 개발 기준 / 3.14: 최신 런타임 호환성 확인
+        python-version: ["3.12", "3.14"]
+    defaults:
+      run:
+        working-directory: backend
     steps:
       - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.14"
+          python-version: ${{ matrix.python-version }}
           allow-prereleases: true
           cache: pip
           cache-dependency-path: |
@@ -23,16 +31,17 @@ jobs:
             backend/requirements-dev.txt
 
       - name: Install dependencies
-        working-directory: backend
         run: python -m pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Run tests
-        working-directory: backend
         run: python -m pytest -v
 
-  frontend-typecheck:
-    name: Frontend (tsc)
+  frontend:
+    name: Frontend (tsc, lint, build)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
     steps:
       - uses: actions/checkout@v6
 
@@ -43,9 +52,16 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
-        working-directory: frontend
         run: npm ci
 
       - name: Type check
-        working-directory: frontend
         run: node_modules/.bin/tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8000
+          NEXT_PUBLIC_TOSS_CLIENT_KEY: test_dummy_key_for_ci
