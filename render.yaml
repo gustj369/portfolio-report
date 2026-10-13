@@ -4,13 +4,17 @@ services:
     runtime: python
     rootDir: backend
     buildCommand: apt-get update -y && apt-get install -y fonts-nanum || true && pip install --no-cache-dir -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    # --proxy-headers/--forwarded-allow-ips: Render 프록시의 X-Forwarded-For로 실제 클라이언트 IP 사용
+    # (미설정 시 모든 요청이 프록시 IP로 보여 IP 기반 rate limit이 전 사용자 합산으로 동작)
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
     plan: free
 
     # 환경변수 — Render 대시보드에서 직접 설정
     envVars:
       - key: GEMINI_API_KEY
         sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash-lite
       - key: FRED_API_KEY
         sync: false
       - key: REDIS_URL

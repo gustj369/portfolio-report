@@ -11,6 +11,14 @@ sys.path.insert(0, os.path.dirname(__file__))
 from models.report import MarketSnapshot, ScenarioResult, SimulationResult
 from services.market_data import MARKET_DEFAULTS
 from test_pipeline import _sample_data
+from limiter import limiter
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limits():
+    """테스트 간 rate limit 카운터 공유 방지 — 모든 요청이 같은 테스트 클라이언트 IP로 집계됨"""
+    limiter.reset()
+    yield
 
 
 @pytest.fixture

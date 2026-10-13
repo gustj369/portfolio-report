@@ -8,7 +8,7 @@ import time
 from datetime import datetime, timezone, timedelta
 
 KST = timezone(timedelta(hours=9))
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel
 import httpx
 
@@ -16,6 +16,7 @@ from config import get_settings, Settings
 from models.portfolio import AnalyzeRequest
 from services.alert_service import send_admin_alert
 from services.storage import storage_set, storage_get, storage_delete
+from limiter import limiter, REPORT_ISSUE_LIMIT
 
 router = APIRouter(prefix="/payment", tags=["payment"])
 logger = logging.getLogger(__name__)
@@ -90,7 +91,9 @@ def _log_post_approval_storage_failure(
 
 
 @router.post("/request", response_model=PaymentRequestResponse)
+@limiter.limit(REPORT_ISSUE_LIMIT)
 async def request_payment(
+    request: Request,
     body: PaymentRequestInput,
     settings: Settings = Depends(get_settings),
 ) -> PaymentRequestResponse:
@@ -269,7 +272,8 @@ async def confirm_payment(
 
 
 @router.post("/free-confirm", response_model=PaymentConfirmResponse)
-async def free_confirm(body: FreeConfirmInput) -> PaymentConfirmResponse:
+@limiter.limit(REPORT_ISSUE_LIMIT)
+async def free_confirm(request: Request, body: FreeConfirmInput) -> PaymentConfirmResponse:
     """무료(0원) 결제 확인 — Toss 승인 없이 바로 report_token 발급"""
     t0 = time.perf_counter()
     logger.info(f"무료 결제 확인 요청: {body.order_id} ({time.perf_counter() - t0:.2f}s)")

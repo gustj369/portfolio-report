@@ -94,7 +94,20 @@ class PaymentRouterTest(unittest.TestCase):
         payment.storage_set = fake_storage_set
 
         with self.assertRaises(HTTPException) as ctx:
-            asyncio.run(payment.request_payment(FakeRequestBody(), Settings(report_price_krw=4900, toss_secret_key="")))
+            # rate limit 데코레이터가 starlette Request를 요구 — 이 테스트는 결제 분기만 검증하므로 limiter 비활성화
+            from starlette.requests import Request
+            from limiter import limiter
+            http_request = Request({"type": "http", "method": "POST", "path": "/payment/request",
+                                    "headers": [], "query_string": b"", "client": ("127.0.0.1", 0)})
+            limiter.enabled = False
+            try:
+                asyncio.run(payment.request_payment(
+                    request=http_request,
+                    body=FakeRequestBody(),
+                    settings=Settings(report_price_krw=4900, toss_secret_key=""),
+                ))
+            finally:
+                limiter.enabled = True
 
         self.assertEqual(ctx.exception.status_code, 503)
         self.assertIn("결제 서버 설정", ctx.exception.detail)

@@ -2,13 +2,40 @@
 이메일 발송 서비스 — smtplib 기반 (외부 패키지 불필요)
 PDF 리포트 완성 후 사용자 이메일로 첨부 발송
 """
+import hashlib
+import html
 import smtplib
 import logging
+from datetime import datetime, timedelta, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
 
 logger = logging.getLogger(__name__)
+
+KST = timezone(timedelta(hours=9))
+_EMAIL_DAILY_LIMIT = 3  # 같은 수신 주소로 하루 최대 발송 수 — 임의 주소 대량 발송(스팸 통로) 방지
+
+
+def reserve_email_quota(to_address: str) -> bool:
+    """수신 주소별 일일 발송 한도를 확인하고 1건을 차감한다. 한도 초과·저장소 장애 시 False.
+
+    주소 원문 대신 해시를 키로 사용해 저장소에 개인정보를 남기지 않는다.
+    """
+    from services.storage import storage_get, storage_set
+
+    digest = hashlib.sha256(to_address.strip().lower().encode("utf-8")).hexdigest()
+    key = f"email:quota:{digest}:{datetime.now(KST).date().isoformat()}"
+    try:
+        sent = int(storage_get(key) or 0)
+        if sent >= _EMAIL_DAILY_LIMIT:
+            return False
+        storage_set(key, sent + 1, ttl=86400)
+        return True
+    except Exception as e:
+        # 한도를 확인할 수 없으면 보내지 않는다 (PDF 다운로드는 영향 없음)
+        logger.warning(f"이메일 발송 한도 확인 실패 — 발송 건너뜀: {e}")
+        return False
 
 
 def send_report_email(
@@ -44,7 +71,7 @@ def send_report_email(
     <h2 style="color: #1a1a2e; margin-bottom: 4px;">📊 AI 포트폴리오 분석 리포트</h2>
     <p style="color: #888; font-size: 13px; margin-top: 0;">자산 배분 AI 리포트 생성기</p>
     <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-    <p style="font-size: 15px;">안녕하세요, <strong>{display_name}</strong>님.</p>
+    <p style="font-size: 15px;">안녕하세요, <strong>{html.escape(display_name)}</strong>님.</p>
     <p style="font-size: 14px; color: #444; line-height: 1.6;">
       요청하신 <strong>포트폴리오 AI 분석 리포트</strong>가 완성되었습니다.<br>
       첨부된 PDF 파일을 열어 자세한 분석 내용을 확인해보세요.
