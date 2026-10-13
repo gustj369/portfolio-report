@@ -4,6 +4,7 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     gemini_api_key: str = ""
+    gemini_model: str = "gemini-3.5-flash-lite"  # Render 환경변수 GEMINI_MODEL로 교체 가능
     fred_api_key: str = ""
     toss_client_key: str = ""
     toss_secret_key: str = ""

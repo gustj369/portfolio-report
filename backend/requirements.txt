@@ -4,7 +4,7 @@ pydantic>=2.11.0
 pydantic-settings>=2.6.0
 python-dotenv>=1.0.1
 
-# AI — Google Gemini (무료 티어: gemini-1.5-flash 1,500 req/day)
+# AI — Google Gemini (기본 모델 gemini-3.5-flash-lite, 무료 티어 제공)
 google-genai>=1.73.1
 
 # 시장 데이터

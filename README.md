@@ -42,6 +42,7 @@ AI 분석은 입력된 자산 정보를 바탕으로<br>
 | 변수 | 설명 | 필수 |
 |------|------|------|
 | `GEMINI_API_KEY` | Google Gemini API 키 ([무료 발급](https://aistudio.google.com/app/apikey)) | 권장 (없으면 fallback 분석기 사용) |
+| `GEMINI_MODEL` | 사용할 Gemini 모델 (기본: `gemini-3.5-flash-lite`) | 선택 |
 
 ### 프론트엔드 (`frontend/.env.local`)
 
@@ -58,7 +59,7 @@ AI 분석은 입력된 자산 정보를 바탕으로<br>
 |------|------|
 | 프론트엔드 | Next.js 16, React 18, TypeScript, Tailwind CSS |
 | 백엔드 | FastAPI, Python 3.11+ |
-| AI | Google Gemini API (gemini-2.5-flash, 무료 티어) |
+| AI | Google Gemini API (gemini-3.5-flash-lite, 무료 티어) |
 | 시장 데이터 | yfinance, FRED API |
 | PDF 생성 | ReportLab |
 | 차트 | matplotlib |

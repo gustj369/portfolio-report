@@ -1,6 +1,6 @@
 """
 Google Gemini API 연동 — 포트폴리오 분석 텍스트 생성
-모델: gemini-1.5-flash (무료 티어: 1,500 req/day)
+모델: GEMINI_MODEL 환경변수 (기본 gemini-3.5-flash-lite)
 """
 from google import genai
 from google.genai import types
@@ -24,8 +24,8 @@ SYSTEM_PROMPT = """당신은 CFP(공인 재무설계사) 자격을 보유한 전
 - 간결하고 전문적인 문체 유지
 - 반드시 지정된 JSON 형식으로만 응답"""
 
-# 기본 모델 설정 — Flash는 무료, Pro는 품질 더 높음
-DEFAULT_MODEL = "gemini-1.5-flash"  # 무료 티어 사용
+# 기본 모델 — settings.gemini_model 미지정 시 사용 (gemini-1.5-flash는 서비스 종료되어 교체)
+DEFAULT_MODEL = "gemini-3.5-flash-lite"
 
 
 def generate_full_analysis(
@@ -34,6 +34,7 @@ def generate_full_analysis(
     simulation: SimulationResult,
     market_snapshot: MarketSnapshot,
     api_key: str,
+    model: str = DEFAULT_MODEL,
 ) -> AIContent:
     """Gemini API를 호출하여 전체 분석 콘텐츠 생성"""
     client = genai.Client(api_key=api_key)
@@ -41,13 +42,13 @@ def generate_full_analysis(
     portfolio_data = _build_portfolio_context(user_profile, portfolio, simulation, market_snapshot)
 
     # 1. 포트폴리오 종합 진단
-    diagnosis_result = _call_gemini(client, _build_diagnosis_prompt(portfolio_data), label="진단")
+    diagnosis_result = _call_gemini(client, _build_diagnosis_prompt(portfolio_data), label="진단", model=model)
 
     # 2. 리밸런싱 추천
-    rebalancing_result = _call_gemini(client, _build_rebalancing_prompt(portfolio_data, portfolio), label="리밸런싱")
+    rebalancing_result = _call_gemini(client, _build_rebalancing_prompt(portfolio_data, portfolio), label="리밸런싱", model=model)
 
     # 3. 시장 코멘트 + 주의사항
-    market_result = _call_gemini(client, _build_market_prompt(portfolio_data), label="시장코멘트")
+    market_result = _call_gemini(client, _build_market_prompt(portfolio_data), label="시장코멘트", model=model)
 
     return _parse_ai_results(diagnosis_result, rebalancing_result, market_result, simulation, portfolio)
 
@@ -57,6 +58,7 @@ def generate_preview_summary(
     portfolio: Portfolio,
     market_snapshot: MarketSnapshot,
     api_key: str,
+    model: str = DEFAULT_MODEL,
 ) -> tuple[str, int, str]:
     """
     미리보기용 간단 요약 생성 (결제 전)
@@ -77,7 +79,7 @@ def generate_preview_summary(
   "risk_grade": "안정형" 또는 "중립형" 또는 "공격형"
 }}"""
 
-    result = _call_gemini(client, prompt, label="미리보기")
+    result = _call_gemini(client, prompt, label="미리보기", model=model)
 
     try:
         data = json.loads(_extract_json(result))
@@ -191,13 +193,13 @@ def _build_market_prompt(portfolio_data: str) -> str:
 }}"""
 
 
-def _call_gemini(client: genai.Client, prompt: str, label: str = "") -> str:
+def _call_gemini(client: genai.Client, prompt: str, label: str = "", model: str = DEFAULT_MODEL) -> str:
     """Gemini API 호출 (최대 3회 재시도)"""
     config = types.GenerateContentConfig(
         system_instruction=SYSTEM_PROMPT,
         temperature=0.4,
         max_output_tokens=1500,
-        http_options=types.HttpOptions(timeout=60),  # 60초 초과 시 httpx.TimeoutException → retry
+        http_options=types.HttpOptions(timeout=60_000),  # 단위 ms — 60초 초과 시 httpx.TimeoutException → retry
     )
     _label = f"[{label}] " if label else ""
     _last_rate_limit_exc: Exception | None = None  # rate limit 마지막 예외 추적 (3회 소진 시 전파용)
@@ -206,7 +208,7 @@ def _call_gemini(client: genai.Client, prompt: str, label: str = "") -> str:
         try:
             t_start = time.perf_counter()
             response = client.models.generate_content(
-                model=DEFAULT_MODEL,
+                model=model,
                 contents=prompt,
                 config=config,
             )

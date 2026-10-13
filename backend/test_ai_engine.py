@@ -237,6 +237,25 @@ class TestCallGemini:
 
         assert result == "정상 응답"
 
+    def test_request_uses_given_model_and_60s_timeout(self):
+        """지정 모델로 호출하고, HttpOptions.timeout은 ms 단위이므로 60초 = 60_000이어야 한다"""
+        ok_response = MagicMock()
+        ok_response.text = "{}"
+        client = self._make_client([ok_response])
+
+        _call_gemini(client, "test prompt", model="gemini-test-model")
+
+        kwargs = client.models.generate_content.call_args.kwargs
+        assert kwargs["model"] == "gemini-test-model"
+        assert kwargs["config"].http_options.timeout == 60_000
+
+    def test_default_model_matches_settings_default(self):
+        """설정 기본값과 엔진 기본 모델이 어긋나지 않아야 한다 (종료된 gemini-1.5 재발 방지)"""
+        from config import Settings
+        from services.ai_engine import DEFAULT_MODEL
+        assert Settings.model_fields["gemini_model"].default == DEFAULT_MODEL
+        assert not DEFAULT_MODEL.startswith("gemini-1.5")
+
     def test_rate_limit_exhausted_logs_error_message(self, caplog):
         """rate limit 3회 소진 시 ERROR 레벨로 '3회 소진' 메시지가 기록되어야 한다"""
         client = self._make_client([_RATE_LIMIT_EXC, _RATE_LIMIT_EXC, _RATE_LIMIT_EXC])
