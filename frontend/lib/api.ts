@@ -27,7 +27,12 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: res.statusText }));
-    const err = new Error(error.detail || `API 오류: ${res.status}`) as ApiError;
+    // rate limit(429) 응답은 detail 필드가 없어 사용자용 문구로 대체
+    const message =
+      res.status === 429
+        ? "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."
+        : error.detail || `API 오류: ${res.status}`;
+    const err = new Error(message) as ApiError;
     err.httpStatus = res.status;
     throw err;
   }
@@ -85,4 +90,20 @@ export function getDownloadUrl(reportToken: string): string {
  */
 export function resolveDownloadUrl(downloadUrl: string): string {
   return downloadUrl.startsWith("http") ? downloadUrl : `${API_URL}${downloadUrl}`;
+}
+
+/**
+ * API 호출 실패를 사용자에게 보여줄 문구로 변환.
+ * 연결 자체가 실패한 경우(브라우저별 "Failed to fetch" 등) 운영 환경에서는 Render 슬립 복귀 안내,
+ * 개발 환경에서는 로컬 백엔드 실행 안내를 보여준다.
+ */
+export function describeApiError(e: unknown, fallback: string): string {
+  const msg = e instanceof Error ? e.message : "";
+  // fetch 연결 실패는 모든 브라우저에서 TypeError (Safari 문구는 "Load failed")
+  if (e instanceof TypeError || msg.includes("fetch") || msg.includes("network") || msg.includes("connect")) {
+    return process.env.NODE_ENV === "development"
+      ? "백엔드 서버에 연결할 수 없습니다. 터미널에서 'python -m uvicorn main:app --reload' 를 먼저 실행해주세요."
+      : "서버에 연결하지 못했습니다. 서버가 대기 상태에서 깨어나는 중일 수 있으니 30초쯤 뒤 다시 시도해주세요.";
+  }
+  return msg || fallback;
 }

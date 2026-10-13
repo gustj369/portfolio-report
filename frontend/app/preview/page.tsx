@@ -6,7 +6,7 @@ import Link from "next/link";
 import BlurSection from "@/components/BlurSection";
 import PortfolioChart from "@/components/PortfolioChart";
 import { useInput } from "@/context/InputContext";
-import { requestPayment, freeConfirmPayment } from "@/lib/api";
+import { requestPayment, freeConfirmPayment, describeApiError } from "@/lib/api";
 import type { RiskTolerance } from "@/types/portfolio";
 
 const RISK_GRADE_COLORS: Record<RiskTolerance, string> = {
@@ -53,12 +53,7 @@ export default function PreviewPage() {
         router.push("/payment");
       }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "";
-      if (msg.includes("fetch") || msg.includes("network") || msg.includes("connect")) {
-        setGenError("백엔드 서버에 연결할 수 없습니다. 터미널에서 'python -m uvicorn main:app --reload' 를 먼저 실행해주세요.");
-      } else {
-        setGenError(msg || "오류가 발생했습니다. 다시 시도해주세요.");
-      }
+      setGenError(describeApiError(e, "오류가 발생했습니다. 다시 시도해주세요."));
       setIsGenerating(false);
     }
   };

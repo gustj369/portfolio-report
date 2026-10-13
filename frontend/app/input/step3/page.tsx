@@ -5,7 +5,7 @@ import { useState } from "react";
 import StepProgress from "@/components/StepProgress";
 import PortfolioChart from "@/components/PortfolioChart";
 import { useInput } from "@/context/InputContext";
-import { analyzePortfolio } from "@/lib/api";
+import { analyzePortfolio, describeApiError } from "@/lib/api";
 
 const LOADING_MESSAGES = [
   "시장 데이터 수집 중...",
@@ -40,12 +40,7 @@ export default function Step3Page() {
       setPreviewResponse(result);
       router.push("/preview");
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "";
-      if (msg.includes("fetch") || msg.includes("network") || msg.includes("connect")) {
-        setError("백엔드 서버에 연결할 수 없습니다. 터미널에서 'python -m uvicorn main:app --reload' 를 먼저 실행해주세요.");
-      } else {
-        setError(msg || "분석 중 오류가 발생했습니다. 다시 시도해주세요.");
-      }
+      setError(describeApiError(e, "분석 중 오류가 발생했습니다. 다시 시도해주세요."));
     } finally {
       clearInterval(interval);
       setIsLoading(false);

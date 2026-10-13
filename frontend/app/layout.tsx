@@ -14,7 +14,7 @@ const notoSansKR = Noto_Sans_KR({
 export const metadata: Metadata = {
   title: "포트폴리오 AI 분석 리포트 | 5분 만에 받는 AI 재무 설계",
   description:
-    "AI가 내 포트폴리오를 분석하고 5년 뒤 예상 자산과 맞춤 리밸런싱 전략을 담은 전문 리포트를 생성합니다. 단 4,900원.",
+    "AI가 내 포트폴리오를 분석하고 5년 뒤 예상 자산과 맞춤 리밸런싱 전략을 담은 전문 리포트를 무료로 생성합니다.",
   openGraph: {
     title: "포트폴리오 AI 분석 리포트",
     description: "5분 만에 받는 AI 재무 설계 리포트",

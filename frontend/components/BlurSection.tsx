@@ -39,12 +39,12 @@ export default function BlurSection({
             </svg>
           </div>
           <p className="text-sm font-semibold text-navy mb-1">{label}</p>
-          <p className="text-xs text-gray-500 mb-3">전체 리포트를 구매하면 확인할 수 있습니다</p>
+          <p className="text-xs text-gray-500 mb-3">무료 전체 리포트에서 확인할 수 있습니다</p>
           <button
             onClick={() => router.push("/payment")}
             className="px-5 py-2 bg-gold-500 text-white text-sm font-bold rounded-lg hover:bg-gold-600 transition-colors shadow-sm"
           >
-            전체 리포트 받기 — 4,900원
+            전체 리포트 받기 (무료)
           </button>
         </div>
       </div>
