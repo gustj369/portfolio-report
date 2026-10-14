@@ -63,7 +63,7 @@ def generate_portfolio_pie_chart(portfolio: Portfolio) -> bytes:
     """포트폴리오 자산 배분 파이차트 생성"""
     labels = [a.asset_name for a in portfolio.allocations]
     sizes = [a.weight for a in portfolio.allocations]
-    colors = COLORS_PIE[:len(labels)]
+    colors = _palette(len(labels))
 
     fig, ax = plt.subplots(figsize=(8, 6), facecolor=WHITE)
     ax.set_facecolor(WHITE)
@@ -265,8 +265,9 @@ def generate_rebalancing_comparison_chart(
     new_rec_labels = [x[0] for x in filtered_rec]
     new_rec_sizes  = [x[1] for x in filtered_rec]
 
-    max_labels = max(len(current_labels), len(new_rec_labels))
-    colors = COLORS_PIE[:max_labels]
+    # 자산명별로 색을 고정 — 인덱스 기준으로 칠하면 0% 항목이 빠질 때 두 차트의 색이 어긋남
+    all_labels = list(dict.fromkeys(current_labels + new_rec_labels))
+    color_of = dict(zip(all_labels, _palette(len(all_labels))))
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5), facecolor=WHITE)
 
@@ -275,26 +276,27 @@ def generate_rebalancing_comparison_chart(
         (ax2, new_rec_sizes, new_rec_labels, "추천 비중"),
     ]:
         ax.set_facecolor(WHITE)
-        ax.pie(
+        _, _, autotexts = ax.pie(
             sizes,
-            colors=colors[:len(sizes)],
+            colors=[color_of[label] for label in labels],
             autopct="%1.1f%%",
             startangle=90,
             pctdistance=0.8,
             wedgeprops={"edgecolor": WHITE, "linewidth": 2},
         )
+        # 남색 등 어두운 조각에서도 읽히도록 비율 텍스트를 흰색 굵게 (현재 배분 파이차트와 동일)
+        for autotext in autotexts:
+            autotext.set_color(WHITE)
+            autotext.set_fontweight("bold")
         ax.set_title(title, fontsize=13, fontweight="bold", color=NAVY, pad=10)
 
-    # 공통 범례 (추천 비중 기준 — 신규 편입 항목 포함)
-    legend_patches = [
-        mpatches.Patch(color=colors[i], label=new_rec_labels[i])
-        for i in range(len(new_rec_labels))
-    ]
+    # 공통 범례 — 현재·추천 양쪽 자산 모두 (추천 0%로 빠진 자산도 현재 차트에 있으므로 포함)
+    legend_patches = [mpatches.Patch(color=color_of[label], label=label) for label in all_labels]
     fig.legend(
         handles=legend_patches,
         loc="lower center",
         bbox_to_anchor=(0.5, -0.05),
-        ncol=min(4, len(current_labels)),
+        ncol=min(4, len(all_labels)),
         fontsize=9,
         frameon=False,
     )
@@ -302,6 +304,11 @@ def generate_rebalancing_comparison_chart(
     fig.suptitle("포트폴리오 리밸런싱 비교", fontsize=15, fontweight="bold", color=NAVY, y=1.02)
     fig.tight_layout()
     return _fig_to_bytes(fig)
+
+
+def _palette(n: int) -> list[str]:
+    """n개 색 — 팔레트(10색)보다 많으면 순환"""
+    return [COLORS_PIE[i % len(COLORS_PIE)] for i in range(n)]
 
 
 def _fig_to_bytes(fig: plt.Figure) -> bytes:

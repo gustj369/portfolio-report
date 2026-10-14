@@ -93,3 +93,43 @@ class TestChartGeneratorSmoke:
 
         assert isinstance(result, bytes)
         assert len(result) > 0
+
+
+def test_rebalancing_chart_keeps_same_color_per_asset_when_zero_weight_dropped():
+    """추천 0%로 빠지는 자산이 있어도 현재·추천 차트에서 같은 자산은 같은 색이어야 한다"""
+    from unittest.mock import patch
+    from matplotlib.axes import Axes
+    from services.chart_generator import generate_rebalancing_comparison_chart
+
+    portfolio = Portfolio(total_asset=1000, monthly_saving=0, allocations=[
+        Allocation(asset_name="비트코인", asset_type=AssetType.BITCOIN, weight=30),
+        Allocation(asset_name="S&P500 ETF", asset_type=AssetType.FOREIGN_STOCK, weight=40),
+        Allocation(asset_name="국채", asset_type=AssetType.BOND, weight=30),
+    ])
+    recs = [
+        RebalancingRecommendation(asset_name="비트코인", current_weight=30, recommended_weight=0, direction="감소", reason="-"),
+        RebalancingRecommendation(asset_name="S&P500 ETF", current_weight=40, recommended_weight=55, direction="증가", reason="-"),
+        RebalancingRecommendation(asset_name="국채", current_weight=30, recommended_weight=45, direction="증가", reason="-"),
+    ]
+    calls = []
+    real_pie = Axes.pie
+
+    def spy(self, x, *args, **kwargs):
+        calls.append(list(kwargs["colors"]))
+        return real_pie(self, x, *args, **kwargs)
+
+    with patch.object(Axes, "pie", spy):
+        generate_rebalancing_comparison_chart(portfolio, recs)
+
+    current_colors, rec_colors = calls
+    # 추천 차트 = [S&P500 ETF, 국채] → 현재 차트의 2·3번째 색과 같아야 함
+    assert rec_colors == current_colors[1:]
+
+
+def test_pie_chart_supports_more_assets_than_palette():
+    """팔레트(10색)보다 자산이 많아도(최대 20개) 차트 생성이 실패하지 않아야 한다"""
+    from services.chart_generator import generate_portfolio_pie_chart
+    portfolio = Portfolio(total_asset=1000, monthly_saving=0, allocations=[
+        Allocation(asset_name=f"자산{i}", asset_type=AssetType.FOREIGN_STOCK, weight=5) for i in range(20)
+    ])
+    assert len(generate_portfolio_pie_chart(portfolio)) > 0
