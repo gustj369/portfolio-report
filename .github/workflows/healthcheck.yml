@@ -1,0 +1,53 @@
+name: Weekly live check
+
+# 운영 서비스가 외부 무료 서비스(Upstash Redis, Gemini, 시장 데이터 소스) 변화로
+# 조용히 고장 나는 것을 감지 — 실패 시 GitHub이 워크플로 알림 메일을 보낸다.
+on:
+  schedule:
+    - cron: "0 0 * * 1"   # 매주 월요일 00:00 UTC = 09:00 KST
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      API: https://portfolio-report-8qjk.onrender.com
+    steps:
+      - name: Health (Render 무료 플랜 슬립 복귀 대기, 최대 약 3분)
+        run: |
+          for i in $(seq 1 12); do
+            body=$(curl -s -m 60 "$API/health" || true)
+            echo "attempt $i: $body"
+            if echo "$body" | grep -q '"status":"ok"'; then break; fi
+            sleep 15
+          done
+          echo "$body" | grep -q '"status":"ok"' || { echo "::error::/health 응답 없음"; exit 1; }
+          echo "$body" | grep -q '"redis":"connected"' || { echo "::error::Redis 미연결 — Upstash DB와 Render REDIS_URL 확인"; exit 1; }
+
+      - name: Analyze (시장 데이터·AI 분석)
+        run: |
+          cat > req.json <<'JSON'
+          {"user_profile": {"age": 41, "monthly_income": 500, "investment_goal": "노후준비", "risk_tolerance": "안정형"},
+           "portfolio": {"total_asset": 3000, "monthly_saving": 80,
+                         "allocations": [{"asset_name": "금 ETF", "asset_type": "금", "weight": 40},
+                                         {"asset_name": "국채", "asset_type": "채권", "weight": 60}]}}
+          JSON
+          code=$(curl -s -m 120 -o res.json -w "%{http_code}" -X POST "$API/analyze" \
+                 -H "Content-Type: application/json" --data-binary @req.json)
+          echo "HTTP $code"; cat res.json; echo
+          [ "$code" = "200" ] || { echo "::error::/analyze HTTP $code"; exit 1; }
+          python3 - <<'PY'
+          import json, sys
+          d = json.load(open("res.json", encoding="utf-8"))
+          errors = []
+          # 2500은 KOSPI 수집 전체 실패 시 기본값
+          if d["market_data"]["kospi"] == 2500.0:
+              errors.append("KOSPI 기본값(2500) 사용 중 — 시장 데이터 수집 실패")
+          # fallback 분석기 요약은 '{나이}세 {목표} 목표의 …'로 시작 → AI 미동작
+          if d["portfolio_summary"].startswith("41세 노후준비 목표의"):
+              errors.append("AI 요약이 아닌 규칙 기반 요약 — GEMINI_API_KEY·GEMINI_MODEL 확인")
+          for e in errors:
+              print(f"::error::{e}")
+          print("KOSPI", d["market_data"]["kospi"], "| summary:", d["portfolio_summary"][:80])
+          sys.exit(1 if errors else 0)
+          PY
