@@ -17,7 +17,7 @@ class ScenarioResult(BaseModel):
     final_value: float  # 만원
     total_return_pct: float
     cagr: float
-    max_drawdown: float
+    max_drawdown: float  # 결정론적 경로 기준 — 양수 수익률이면 0 (simulator._simulate_scenario 참고)
 
 
 class SimulationResult(BaseModel):

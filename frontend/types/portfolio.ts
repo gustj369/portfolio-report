@@ -37,7 +37,7 @@ export interface ScenarioResult {
   final_value: number;
   total_return_pct: number;
   cagr: number;
-  max_drawdown: number;
+  max_drawdown: number; // 결정론적 시뮬레이션 기준 — 수익률이 양수면 항상 0 (화면 표시용 아님)
 }
 
 export interface SimulationResult {

@@ -101,7 +101,9 @@ def _simulate_scenario(
         # 월 초 적립 후 수익 적용 (annuity-due: 기여분도 해당 월 수익 반영)
         current_value = (current_value + monthly_contribution) * (1 + monthly_return)
 
-        # 최대 낙폭 계산
+        # 최대 낙폭 계산 — 매월 동일 수익률을 적용하는 결정론적 시뮬레이션이라
+        # 수익률이 양수면 항상 0이고, 음수 수익률(적립액보다 손실이 큰 경우)에서만 값이 생긴다.
+        # 시장 변동에 따른 실제 낙폭 추정치가 아니므로 리포트에 표시하지 않는다.
         if current_value > peak_value:
             peak_value = current_value
         drawdown = (peak_value - current_value) / peak_value if peak_value > 0 else 0
