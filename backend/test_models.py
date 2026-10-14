@@ -165,3 +165,51 @@ class TestValidateEmail:
         """email 필드 미전달 시 기본값은 빈 문자열이어야 한다"""
         profile = _user_profile()
         assert profile.email == ""
+
+
+# ── 입력 상한·하한 (비정상·남용 입력 차단) ──────────────────────────────────
+
+def _profile(**kw):
+    base = dict(age=30, monthly_income=400, investment_goal="자산증식", risk_tolerance="중립형")
+    return {**base, **kw}
+
+
+def _alloc_dict(**kw):
+    return {"asset_name": "A", "asset_type": "해외주식", "weight": 100, **kw}
+
+
+class TestInputLimits:
+    @pytest.mark.parametrize("field,value", [
+        ("age", 0), ("age", 121), ("monthly_income", -1), ("investment_period", 0),
+        ("investment_period", 51), ("name", "가" * 51), ("email", "a@" + "b" * 253),
+    ])
+    def test_user_profile_rejects_out_of_range(self, field, value):
+        with pytest.raises(ValidationError):
+            UserProfile(**_profile(**{field: value}))
+
+    @pytest.mark.parametrize("field,value", [("total_asset", -1), ("monthly_saving", -1),
+                                             ("total_asset", 10_000_001)])
+    def test_portfolio_rejects_out_of_range_amounts(self, field, value):
+        with pytest.raises(ValidationError):
+            Portfolio(**{"total_asset": 1000, "monthly_saving": 50,
+                         "allocations": [_alloc_dict()], field: value})
+
+    def test_portfolio_rejects_too_many_allocations(self):
+        allocs = [_alloc_dict(asset_name=f"A{i}", weight=100 / 21) for i in range(21)]
+        with pytest.raises(ValidationError):
+            Portfolio(total_asset=1000, monthly_saving=0, allocations=allocs)
+
+    def test_allocation_rejects_long_name_and_ticker(self):
+        with pytest.raises(ValidationError):
+            Allocation(**_alloc_dict(asset_name="가" * 51))
+        with pytest.raises(ValidationError):
+            Allocation(**_alloc_dict(ticker="X" * 21))
+
+    def test_blank_asset_name_defaults_to_asset_type(self):
+        """자산명을 비워도 거절하지 않고 유형명으로 채워 차트·PDF에 빈 라벨이 생기지 않게 한다"""
+        assert Allocation(**_alloc_dict(asset_name="  ")).asset_name == "해외주식"
+
+    def test_boundary_values_are_accepted(self):
+        UserProfile(**_profile(age=120, investment_period=50, name="가" * 50))
+        Portfolio(total_asset=0, monthly_saving=0,
+                  allocations=[_alloc_dict(asset_name=f"A{i}", weight=5) for i in range(20)])

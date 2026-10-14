@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional
 from enum import Enum
 
@@ -28,14 +28,20 @@ class AssetType(str, Enum):
     GOLD = "금"
 
 
+# 입력 상한 — 프론트 제한보다 넉넉하게 두어 정상 입력은 거절하지 않고, 비정상·남용 입력만 422로 차단
+_MAX_AMOUNT_MANWON = 10_000_000   # 1,000억원 (만원 단위)
+_MAX_ALLOCATIONS = 20              # 프론트 '자산 추가' 상한과 동일
+_MAX_NAME_LEN = 50
+
+
 class UserProfile(BaseModel):
-    age: int
-    monthly_income: int  # 만원
+    age: int = Field(ge=1, le=120)
+    monthly_income: int = Field(ge=0, le=_MAX_AMOUNT_MANWON)  # 만원
     investment_goal: InvestmentGoal
-    investment_period: int = 5  # 년
+    investment_period: int = Field(default=5, ge=1, le=50)  # 년
     risk_tolerance: RiskTolerance
-    name: str = ""
-    email: str = ""
+    name: str = Field(default="", max_length=_MAX_NAME_LEN)
+    email: str = Field(default="", max_length=254)
 
     @field_validator("email")
     @classmethod
@@ -47,11 +53,11 @@ class UserProfile(BaseModel):
 
 
 class Allocation(BaseModel):
-    asset_name: str
+    asset_name: str = Field(max_length=_MAX_NAME_LEN)
     asset_type: AssetType
     weight: float  # 0~100
-    ticker: Optional[str] = None
-    amount: Optional[float] = None  # 만원
+    ticker: Optional[str] = Field(default=None, max_length=20)
+    amount: Optional[float] = Field(default=None, ge=0)  # 만원
 
     @field_validator("weight")
     @classmethod
@@ -60,11 +66,18 @@ class Allocation(BaseModel):
             raise ValueError("비중은 0~100 사이여야 합니다")
         return v
 
+    @model_validator(mode="after")
+    def default_name_to_type(self) -> "Allocation":
+        """자산명을 비워두면 자산 유형명으로 채움 — 차트 범례·PDF 표에 빈 라벨이 생기지 않도록"""
+        if not self.asset_name.strip():
+            self.asset_name = self.asset_type.value
+        return self
+
 
 class Portfolio(BaseModel):
-    total_asset: int  # 만원
-    monthly_saving: int  # 만원
-    allocations: list[Allocation]
+    total_asset: int = Field(ge=0, le=_MAX_AMOUNT_MANWON)  # 만원
+    monthly_saving: int = Field(ge=0, le=_MAX_AMOUNT_MANWON)  # 만원
+    allocations: list[Allocation] = Field(min_length=1, max_length=_MAX_ALLOCATIONS)
 
     @field_validator("allocations")
     @classmethod

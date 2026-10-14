@@ -19,6 +19,18 @@ if (process.env.NODE_ENV === "development" && !process.env.NEXT_PUBLIC_API_URL) 
   );
 }
 
+/** 오류 응답의 detail을 문구로 변환 — 422 검증 오류는 문자열이 아닌 [{loc, msg}] 목록으로 옴 */
+function formatErrorDetail(detail: unknown): string | null {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const msgs = detail
+      .map((d) => String((d as { msg?: unknown })?.msg ?? "").replace(/^Value error, /, ""))
+      .filter(Boolean);
+    return msgs.length ? `입력값을 확인해주세요: ${msgs.join(" / ")}` : null;
+  }
+  return null;
+}
+
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     headers: { "Content-Type": "application/json" },
@@ -31,7 +43,7 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
     const message =
       res.status === 429
         ? "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."
-        : error.detail || `API 오류: ${res.status}`;
+        : formatErrorDetail(error.detail) || `API 오류: ${res.status}`;
     const err = new Error(message) as ApiError;
     err.httpStatus = res.status;
     throw err;
