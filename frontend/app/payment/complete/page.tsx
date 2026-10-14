@@ -25,6 +25,8 @@ const STATUS_STEPS = [
 function CompletePageContent() {
   const searchParams = useSearchParams();
   const { state, setReportToken } = useInput();
+  // 주문 정보 누락은 URL만으로 판단 가능 — effect에서 setState하지 않고 렌더 단계에서 오류 화면 표시
+  const hasOrderParams = !!searchParams.get("orderId") && !!searchParams.get("amount");
 
   const [phase, setPhase] = useState<"confirming" | "generating" | "done" | "error">("confirming");
   const [reportToken, setLocalReportToken] = useState<string | null>(null);
@@ -68,11 +70,7 @@ function CompletePageContent() {
     const amount = searchParams.get("amount");
     const preConfirmedToken = searchParams.get("token"); // 미리 확인된 토큰 (무료 플로우)
 
-    if (!orderId || !amount) {
-      setPhase("error");
-      setErrorMsg("결제 정보가 올바르지 않습니다.");
-      return;
-    }
+    if (!orderId || !amount) return; // hasOrderParams=false → 렌더 단계에서 오류 화면
 
     // 언마운트 후 poll 상태 업데이트 방지
     let isCancelled = false;
@@ -289,13 +287,15 @@ function CompletePageContent() {
     );
   }
 
-  if (phase === "error") {
+  if (phase === "error" || !hasOrderParams) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-8">
         <div className="max-w-md w-full card text-center">
           <div className="text-5xl mb-4">❌</div>
           <h1 className="text-xl font-bold text-navy mb-2">오류가 발생했습니다</h1>
-          <p className="text-gray-500 text-sm mb-4">{errorMsg}</p>
+          <p className="text-gray-500 text-sm mb-4">
+            {hasOrderParams ? errorMsg : "결제 정보가 올바르지 않습니다."}
+          </p>
           {errorCode === "timeout" && (
             <p className="text-xs text-gray-400 mb-4">
               재시도 후에도 같은 문제가 반복되면 고객센터에 문의해주세요.
