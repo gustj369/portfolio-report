@@ -23,7 +23,8 @@ export default function PaymentPage() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [orderId, setLocalOrderId] = useState<string | null>(null);
-  const [amount, setAmount] = useState(4900);
+  // 실제 금액은 /payment/request 응답으로 설정 — 응답 전 이전 유료가(4,900원)가 잠깐 보이지 않도록 0으로 시작
+  const [amount, setAmount] = useState(0);
   const [clientKey, setClientKey] = useState("");
   const [isFree, setIsFree] = useState(false);
   const [error, setError] = useState("");
