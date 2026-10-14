@@ -29,7 +29,6 @@ function CompletePageContent() {
   const hasOrderParams = !!searchParams.get("orderId") && !!searchParams.get("amount");
 
   const [phase, setPhase] = useState<"confirming" | "generating" | "done" | "error">("confirming");
-  const [reportToken, setLocalReportToken] = useState<string | null>(null);
   const [reportStatus, setReportStatus] = useState<ReportStatus>("pending");
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
@@ -56,7 +55,7 @@ function CompletePageContent() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(blobUrl);
-    } catch (e) {
+    } catch {
       // alert 대신 인라인 상태 메시지 — UX 흐름 유지 (페이지 이탈 없음)
       setDownloadError("다운로드에 실패했습니다. 다시 시도해주세요.");
     } finally {
@@ -85,7 +84,6 @@ function CompletePageContent() {
 
         if (cachedToken) {
           token = cachedToken;
-          setLocalReportToken(token);
           setReportToken(token);
           setCurrentStep(1);
           if (isCancelled) return; // 상태 설정 후 언마운트 방어
@@ -95,7 +93,6 @@ function CompletePageContent() {
           // 무료 플로우: 이미 confirm 완료된 토큰 사용
           setCurrentStep(0);
           token = preConfirmedToken;
-          setLocalReportToken(token);
           setReportToken(token);
           sessionStorage.setItem(`rpt_${orderId}`, token);
           if (isCancelled) return; // 상태 설정 후 언마운트 방어
@@ -115,7 +112,6 @@ function CompletePageContent() {
             });
             if (isCancelled) return; // confirm 완료 전 언마운트 방어
             token = confirmResult.report_token;
-            setLocalReportToken(token);
             setReportToken(token);
             sessionStorage.setItem(`rpt_${orderId}`, token);
           } catch (e) {
@@ -142,7 +138,7 @@ function CompletePageContent() {
             if (isCancelled) return; // 2초 대기 중 언마운트 방어 — 재시도 불필요
             await generateReport(token);
           });
-        } catch (e) {
+        } catch {
           if (isCancelled) return; // generateReport 실패 전 언마운트 방어
           // 결제는 완료됐으나 리포트 생성 API 요청 실패
           // sessionStorage 토큰을 보존해 "다시 시도"(새로고침) 시 confirm 단계 건너뜀
